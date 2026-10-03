@@ -8,7 +8,7 @@
 
 Este documento define los requisitos funcionales y no funcionales de **Estimate Arena**, una aplicación web multijugador de estimaciones numéricas. Su propósito es servir como base trazable para las siguientes etapas: casos de uso, reglas de negocio definitivas, modelo de dominio, base de datos, API REST y frontend en Vue.js.
 
-La fórmula exacta de puntuación permanece pendiente de definición. No se diseñarán tablas ni endpoints hasta resolverla.
+La puntuación se calcula en el servidor con un máximo de 1 000 puntos y un margen persistido por desafío.
 
 ## 2. Alcance y decisiones aprobadas
 
@@ -146,15 +146,9 @@ El cierre puede evaluarse cada vez que el servidor recibe una estimación o una 
 | RF-65 | El sistema deberá impedir que el cliente envíe o modifique los puntos obtenidos. | MVP |
 | RF-66 | El sistema podrá mostrar una explicación breve o fuente del dato después del cierre. | Entrega |
 
-#### Decisión pendiente de puntuación
+#### Puntuación aprobada (DP-01)
 
-Antes del diseño de la API se deberá definir:
-
-- Puntaje máximo por ronda.
-- Uso de diferencia absoluta, error porcentual u otra fórmula sencilla.
-- Regla de redondeo.
-- Tratamiento de estimaciones extremadamente alejadas.
-- Puntuación de una respuesta exacta.
+Los puntos son `redondear(1000 * max(0, 1 - diferenciaAbsoluta / margenPuntuacion))` con aritmética decimal y `MidpointRounding.AwayFromZero`. Una respuesta exacta obtiene 1 000; una diferencia igual o superior al margen obtiene cero. El margen es un entero positivo persistido por desafío, no configurable por participantes. Los desafíos cuantitativos actuales usan su respuesta correcta como margen; el desafío de 1969 usa 50.
 
 ### 4.8. Estadísticas de ronda
 

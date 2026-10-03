@@ -18,12 +18,6 @@ info:
 
 x-estado-contrato: BORRADOR
 x-decisiones-pendientes:
-  - id: DP-01
-    tema: Puntuación
-    descripcion: >-
-      Deben aprobarse la fórmula, el puntaje máximo por ronda y la regla de redondeo antes
-      de implementar el cierre de ronda. El contrato solo fija que los puntos son enteros
-      no negativos y que los calcula el servidor.
   - id: DP-02
     tema: Posiciones posteriores a un empate
     descripcion: >-
