@@ -51,6 +51,11 @@ public sealed class PartidasController(IPartidasServicio partidas) : ControllerB
     public Task<ResultadosRonda> ConsultarResultados(long partidaId, long rondaId, CancellationToken cancellationToken) =>
         partidas.ConsultarResultadosAsync(partidaId, rondaId, ObtenerSesion(), cancellationToken);
 
+    [HttpGet("{partidaId:long}/ranking")]
+    [Authorize]
+    public Task<RankingPartida> ConsultarRanking(long partidaId, CancellationToken cancellationToken) =>
+        partidas.ConsultarRankingAsync(partidaId, ObtenerSesion(), cancellationToken);
+
     private SesionActual ObtenerSesion()
     {
         var partidaId = long.Parse(User.FindFirstValue("partidaId")!);

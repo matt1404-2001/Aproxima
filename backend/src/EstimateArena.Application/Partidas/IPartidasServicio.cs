@@ -7,6 +7,7 @@ public interface IPartidasServicio
     Task<TransicionPartida> IniciarAsync(long partidaId, SesionActual sesion, CancellationToken cancellationToken);
     Task<EstimacionAceptada> EnviarEstimacionAsync(long partidaId, long rondaId, long valor, SesionActual sesion, CancellationToken cancellationToken);
     Task<ResultadosRonda> ConsultarResultadosAsync(long partidaId, long rondaId, SesionActual sesion, CancellationToken cancellationToken);
+    Task<RankingPartida> ConsultarRankingAsync(long partidaId, SesionActual sesion, CancellationToken cancellationToken);
     Task<SesionRecuperada> RecuperarSesionAsync(long partidaId, SesionActual sesion, CancellationToken cancellationToken);
     Task<object> ConsultarEstadoAsync(long partidaId, SesionActual sesion, CancellationToken cancellationToken);
 }
@@ -25,3 +26,5 @@ public sealed record EstimacionAceptada(long EstimacionId, long PartidaId, long 
 public sealed record ResultadosRonda(long PartidaId, long RondaId, int Numero, int TotalRondas, string Enunciado, string Unidad, long RespuestaCorrecta, string MotivoCierre, DateTimeOffset CerradaEn, EstadisticasRonda Estadisticas, ResultadoPersonal? ResultadoPersonal, DateTimeOffset ServidorAhora);
 public sealed record EstadisticasRonda(bool HayRespuestas, int CantidadRespuestas, int TotalJugadores, long? EstimacionMinima, decimal? Promedio, long? EstimacionMaxima);
 public sealed record ResultadoPersonal(bool Respondio, long? Estimacion, long? DiferenciaAbsoluta, int Puntos);
+public sealed record RankingPartida(long PartidaId, string Tipo, int RondasCompletadas, int TotalRondas, IReadOnlyList<EntradaRanking> Posiciones, DateTimeOffset ServidorAhora);
+public sealed record EntradaRanking(int Posicion, long JugadorId, string Nombre, int PuntosTotales, bool EsJugadorActual);

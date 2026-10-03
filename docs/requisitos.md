@@ -21,7 +21,7 @@ La puntuación se calcula en el servidor con un máximo de 1 000 puntos y un mar
 - Las estimaciones del MVP serán números enteros positivos.
 - Un jugador que no responda obtendrá cero puntos en esa ronda.
 - Los nombres serán únicos dentro de cada partida.
-- Los empates compartirán posición en el ranking.
+- Los empates usarán ranking de competición: comparten posición y la siguiente equivale a la cantidad de jugadores anteriores más uno (`1, 1, 3`).
 - La comunicación se realizará mediante API REST y polling, sin WebSockets.
 - Los desafíos estarán precargados y se asignarán cinco sin repetición.
 - La autoridad del tiempo pertenecerá al servidor.

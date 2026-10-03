@@ -160,6 +160,38 @@ public sealed class ServicioPartidas(
             sesion.JugadorId is null ? null : new ResultadoPersonal(personal is not null, personal?.Valor, personal?.DiferenciaAbsoluta, personal?.PuntosObtenidos ?? 0), timeProvider.GetUtcNow());
     }
 
+    public async Task<RankingPartida> ConsultarRankingAsync(long partidaId, SesionActual sesion, CancellationToken cancellationToken)
+    {
+        ValidarSesionPartida(partidaId, sesion);
+        var partida = await dbContext.Partidas.AsNoTracking().SingleOrDefaultAsync(x => x.Id == partidaId, cancellationToken) ?? throw NoEncontrada();
+        if (partida.Estado is not (EstadoPartida.RESULTADOS or EstadoPartida.FINALIZADA))
+        {
+            throw Conflicto("RANKING_NO_DISPONIBLE", "El ranking estara disponible despues de finalizar una ronda.");
+        }
+
+        var jugadores = await dbContext.Jugadores.AsNoTracking().Where(x => x.PartidaId == partidaId)
+            .Select(x => new { x.Id, x.Nombre }).ToListAsync(cancellationToken);
+        var puntosPorJugador = await dbContext.Estimaciones.AsNoTracking()
+            .Where(x => x.PuntosObtenidos != null)
+            .Join(dbContext.Rondas.Where(x => x.PartidaId == partidaId), estimacion => estimacion.RondaId, ronda => ronda.Id,
+                (estimacion, _) => new { estimacion.JugadorId, Puntos = estimacion.PuntosObtenidos!.Value })
+            .GroupBy(x => x.JugadorId).ToDictionaryAsync(x => x.Key, x => x.Sum(y => y.Puntos), cancellationToken);
+        var ordenados = jugadores.Select(x => new { x.Id, x.Nombre, Puntos = puntosPorJugador.GetValueOrDefault(x.Id) })
+            .OrderByDescending(x => x.Puntos).ThenBy(x => x.Id).ToList();
+        var posiciones = new List<EntradaRanking>(ordenados.Count);
+        var posicion = 0;
+        var puntosAnteriores = -1;
+        for (var indice = 0; indice < ordenados.Count; indice++)
+        {
+            var jugador = ordenados[indice];
+            if (indice == 0 || jugador.Puntos != puntosAnteriores) posicion = indice + 1;
+            puntosAnteriores = jugador.Puntos;
+            posiciones.Add(new EntradaRanking(posicion, jugador.Id, jugador.Nombre, jugador.Puntos, sesion.JugadorId == jugador.Id));
+        }
+        var rondas = await dbContext.Rondas.CountAsync(x => x.PartidaId == partidaId && x.Estado == EstadoRonda.CERRADA, cancellationToken);
+        return new RankingPartida(partidaId, partida.Estado == EstadoPartida.FINALIZADA ? "FINAL" : "PROVISIONAL", rondas, partida.CantidadRondas, posiciones, timeProvider.GetUtcNow());
+    }
+
     private async Task CerrarRondaAsync(Partida partida, Ronda ronda, string motivo, DateTimeOffset ahora, CancellationToken cancellationToken)
     {
         if (ronda.Estado != EstadoRonda.ACTIVA) return;
