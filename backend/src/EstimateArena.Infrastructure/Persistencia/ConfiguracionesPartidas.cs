@@ -71,6 +71,8 @@ internal sealed class RondaConfiguracion : IEntityTypeConfiguration<Ronda>
         builder.Property(x => x.DesafioId).HasColumnName("id_desafio");
         builder.Property(x => x.Numero).HasColumnName("numero_ronda");
         builder.Property(x => x.Estado).HasColumnName("estado").HasConversion<string>().HasMaxLength(20);
+        builder.Property(x => x.FechaInicio).HasColumnName("fecha_inicio").HasPrecision(3);
+        builder.Property(x => x.FechaLimite).HasColumnName("fecha_limite").HasPrecision(3);
         builder.HasIndex(x => new { x.PartidaId, x.Numero }).IsUnique().HasDatabaseName("uq_rondas_numero_partida");
         builder.HasIndex(x => new { x.PartidaId, x.DesafioId }).IsUnique().HasDatabaseName("uq_rondas_desafio_partida");
         builder.HasOne(x => x.Partida).WithMany(x => x.Rondas).HasForeignKey(x => x.PartidaId).OnDelete(DeleteBehavior.Cascade);
