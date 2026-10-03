@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS desafios (
     id_desafio BIGINT UNSIGNED AUTO_INCREMENT,
     pregunta VARCHAR(500) NOT NULL,
     respuesta_correcta BIGINT UNSIGNED NOT NULL,
+    margen_puntuacion BIGINT UNSIGNED NOT NULL,
     unidad VARCHAR(60) NOT NULL,
     explicacion VARCHAR(1000) NULL,
     fuente_url VARCHAR(500) NULL,
@@ -34,6 +35,8 @@ CREATE TABLE IF NOT EXISTS desafios (
     CONSTRAINT uq_desafios_pregunta UNIQUE (pregunta),
     CONSTRAINT chk_desafios_respuesta_positiva
         CHECK (respuesta_correcta > 0),
+    CONSTRAINT chk_desafios_margen_positivo
+        CHECK (margen_puntuacion > 0),
     CONSTRAINT chk_desafios_pregunta_no_vacia
         CHECK (CHAR_LENGTH(TRIM(pregunta)) > 0),
     CONSTRAINT chk_desafios_unidad_no_vacia
