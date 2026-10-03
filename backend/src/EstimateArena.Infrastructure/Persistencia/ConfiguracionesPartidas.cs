@@ -22,6 +22,7 @@ internal sealed class PartidaConfiguracion : IEntityTypeConfiguration<Partida>
         builder.Property(x => x.VersionEstado).HasColumnName("version_estado");
         builder.Property(x => x.FechaCreacion).HasColumnName("fecha_creacion").HasPrecision(3);
         builder.Property(x => x.FechaExpiracion).HasColumnName("fecha_expiracion").HasPrecision(3);
+        builder.Property(x => x.FechaFinalizacion).HasColumnName("fecha_finalizacion").HasPrecision(3);
     }
 }
 

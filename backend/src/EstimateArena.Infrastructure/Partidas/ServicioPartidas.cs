@@ -192,6 +192,47 @@ public sealed class ServicioPartidas(
         return new RankingPartida(partidaId, partida.Estado == EstadoPartida.FINALIZADA ? "FINAL" : "PROVISIONAL", rondas, partida.CantidadRondas, posiciones, timeProvider.GetUtcNow());
     }
 
+    public async Task<TransicionPartida> AvanzarAsync(long partidaId, long rondaId, SesionActual sesion, CancellationToken cancellationToken)
+    {
+        ValidarAnfitrion(partidaId, sesion);
+        await using var transaccion = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var partida = await dbContext.Partidas.Include(x => x.Rondas).ThenInclude(x => x.Desafio).SingleOrDefaultAsync(x => x.Id == partidaId, cancellationToken) ?? throw NoEncontrada();
+        if (partida.Estado != EstadoPartida.RESULTADOS) throw Conflicto("ESTADO_PARTIDA_INCOMPATIBLE", "La ronda actual todavia no ha terminado.");
+        var actual = partida.Rondas.SingleOrDefault(x => x.Id == rondaId && x.Estado == EstadoRonda.CERRADA) ?? throw Conflicto("RONDA_NO_VIGENTE", "La solicitud no corresponde a la ronda vigente.");
+        var siguiente = partida.Rondas.SingleOrDefault(x => x.Numero == actual.Numero + 1 && x.Estado == EstadoRonda.PENDIENTE);
+        if (siguiente is null) throw Conflicto("SIN_RONDAS_PENDIENTES", "No quedan mas rondas. Puedes finalizar la partida.");
+        var ahora = timeProvider.GetUtcNow();
+        siguiente.Estado = EstadoRonda.ACTIVA;
+        siguiente.FechaInicio = ahora;
+        siguiente.FechaLimite = ahora.AddSeconds(partida.DuracionRondaSegundos);
+        partida.Estado = EstadoPartida.RONDA_ACTIVA;
+        partida.VersionEstado++;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaccion.CommitAsync(cancellationToken);
+        return new TransicionPartida("La siguiente ronda ha comenzado.", CrearEstadoRonda(partida, siguiente, sesion, ahora));
+    }
+
+    public async Task<PartidaFinalizada> FinalizarAsync(long partidaId, long rondaId, SesionActual sesion, CancellationToken cancellationToken)
+    {
+        ValidarAnfitrion(partidaId, sesion);
+        var partida = await dbContext.Partidas.Include(x => x.Rondas).SingleOrDefaultAsync(x => x.Id == partidaId, cancellationToken) ?? throw NoEncontrada();
+        if (partida.Estado == EstadoPartida.FINALIZADA)
+        {
+            var rankingExistente = await ConsultarRankingAsync(partidaId, sesion, cancellationToken);
+            return new PartidaFinalizada("La partida ya habia finalizado.", "FINALIZADA", partida.FechaFinalizacion!.Value, rankingExistente);
+        }
+        if (partida.Estado != EstadoPartida.RESULTADOS) throw Conflicto("RONDAS_PENDIENTES", "Todavia quedan rondas por jugar.");
+        var ronda = partida.Rondas.SingleOrDefault(x => x.Id == rondaId && x.Estado == EstadoRonda.CERRADA);
+        if (ronda is null || ronda.Numero != partida.CantidadRondas) throw Conflicto("RONDAS_PENDIENTES", "Todavia quedan rondas por jugar.");
+        var ahora = timeProvider.GetUtcNow();
+        partida.Estado = EstadoPartida.FINALIZADA;
+        partida.FechaFinalizacion = ahora;
+        partida.VersionEstado++;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        var ranking = await ConsultarRankingAsync(partidaId, sesion, cancellationToken);
+        return new PartidaFinalizada("La partida ha finalizado.", "FINALIZADA", ahora, ranking);
+    }
+
     private async Task CerrarRondaAsync(Partida partida, Ronda ronda, string motivo, DateTimeOffset ahora, CancellationToken cancellationToken)
     {
         if (ronda.Estado != EstadoRonda.ACTIVA) return;
@@ -271,6 +312,12 @@ public sealed class ServicioPartidas(
     private static void ValidarSesionPartida(long partidaId, SesionActual sesion)
     {
         if (partidaId != sesion.PartidaId) throw new ExcepcionNegocio(403, "ACCESO_DENEGADO", "No tienes autorizacion para realizar esta accion.");
+    }
+
+    private static void ValidarAnfitrion(long partidaId, SesionActual sesion)
+    {
+        ValidarSesionPartida(partidaId, sesion);
+        if (sesion.Rol != "ANFITRION") throw new ExcepcionNegocio(403, "ACCESO_DENEGADO", "No tienes autorizacion para realizar esta accion.");
     }
 
     private static ExcepcionNegocio NoEncontrada() => new(404, "PARTIDA_NO_ENCONTRADA", "La partida ya no esta disponible.");
