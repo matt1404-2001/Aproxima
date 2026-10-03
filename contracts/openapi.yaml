@@ -1,0 +1,1444 @@
+openapi: 3.1.0
+
+info:
+  title: Estimate Arena API
+  version: 0.1.0
+  summary: Contrato REST para las partidas de Estimate Arena.
+  description: |-
+    Contrato API-first derivado de los requisitos y de los casos de uso CU-01 a CU-13.
+
+    La API identifica al anfitrión y a los jugadores mediante credenciales Bearer privadas.
+    El código de la partida es público y nunca concede permisos de anfitrión.
+
+    El endpoint de estado está pensado para polling cada 2 segundos. Puede materializar de
+    forma idempotente el cierre de una ronda vencida o completada antes de responder.
+
+    La respuesta correcta, la explicación y los puntos no se exponen mientras la ronda está
+    activa. Todas las fechas y horas se transmiten en UTC con formato RFC 3339.
+
+x-estado-contrato: BORRADOR
+x-decisiones-pendientes:
+  - id: DP-01
+    tema: Puntuación
+    descripcion: >-
+      Deben aprobarse la fórmula, el puntaje máximo por ronda y la regla de redondeo antes
+      de implementar el cierre de ronda. El contrato solo fija que los puntos son enteros
+      no negativos y que los calcula el servidor.
+  - id: DP-02
+    tema: Posiciones posteriores a un empate
+    descripcion: >-
+      Los jugadores empatados comparten posición. Debe decidirse si la posición siguiente
+      usa ranking de competición (1, 1, 3) o ranking denso (1, 1, 2). La forma de la
+      respuesta no cambia.
+
+servers:
+  - url: /api/v1
+    description: Ruta base relativa en el servidor publicado.
+  - url: http://localhost:3000/api/v1
+    description: Entorno local de desarrollo.
+
+tags:
+  - name: Sistema
+    description: Comprobación básica de disponibilidad.
+  - name: Partidas
+    description: Creación, sesión, estado y control de una partida.
+  - name: Jugadores
+    description: Ingreso de jugadores sin cuenta.
+  - name: Rondas
+    description: Participación, estimaciones y resultados.
+  - name: Ranking
+    description: Clasificación acumulada de una partida.
+
+paths:
+  /salud:
+    get:
+      tags: [Sistema]
+      operationId: comprobarSalud
+      summary: Comprobar la disponibilidad de la API y la base de datos
+      description: Endpoint de diagnóstico sencillo para verificar el despliegue antes de la exposición.
+      security: []
+      x-trazabilidad:
+        requisitos: [RNF-DISP-04]
+      responses:
+        '200':
+          description: API y base de datos disponibles.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstadoSalud'
+        '503':
+          $ref: '#/components/responses/Error503'
+
+  /partidas:
+    post:
+      tags: [Partidas]
+      operationId: crearPartida
+      summary: Crear una partida
+      description: |-
+        Crea una partida en estado `LOBBY`, selecciona cinco desafíos activos sin repetir
+        y entrega la credencial privada del anfitrión una sola vez en esta respuesta.
+      security: []
+      x-trazabilidad:
+        casosDeUso: [CU-01]
+        requisitos: [RF-01, RF-02, RF-03, RF-04, RF-06, RF-07, RF-08]
+      responses:
+        '201':
+          description: Partida creada correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartidaCreada'
+        '409':
+          description: No existen suficientes desafíos activos para crear la partida.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorApi'
+              examples:
+                desafiosInsuficientes:
+                  value:
+                    codigo: DESAFIOS_INSUFICIENTES
+                    mensaje: No hay suficientes desafíos disponibles para crear la partida.
+                    marcaTiempo: '2026-10-03T16:00:00Z'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+
+  /partidas/codigo/{codigo}/jugadores:
+    post:
+      tags: [Jugadores]
+      operationId: ingresarJugador
+      summary: Ingresar como jugador a una partida
+      description: |-
+        Registra un jugador en una partida que continúa en `LOBBY`. El código se normaliza
+        a mayúsculas y el nombre se compara sin distinguir mayúsculas y minúsculas.
+      security: []
+      x-trazabilidad:
+        casosDeUso: [CU-02]
+        requisitos: [RF-09, RF-10, RF-11, RF-12, RF-13, RF-14, RF-15, RF-18, RF-19]
+      parameters:
+        - $ref: '#/components/parameters/CodigoPartida'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngresarJugadorSolicitud'
+      responses:
+        '201':
+          description: Jugador registrado correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JugadorIngresado'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          description: Partida no disponible, llena o nombre ocupado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorApi'
+              examples:
+                nombreOcupado:
+                  value:
+                    codigo: NOMBRE_OCUPADO
+                    mensaje: Ese nombre ya está en uso. Elige otro.
+                    marcaTiempo: '2026-10-03T16:01:00Z'
+                partidaLlena:
+                  value:
+                    codigo: PARTIDA_LLENA
+                    mensaje: La partida alcanzó el máximo de jugadores.
+                    marcaTiempo: '2026-10-03T16:01:00Z'
+                partidaNoDisponible:
+                  value:
+                    codigo: PARTIDA_NO_DISPONIBLE
+                    mensaje: La partida ya comenzó o finalizó y no admite nuevos jugadores.
+                    marcaTiempo: '2026-10-03T16:01:00Z'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+
+  /partidas/{partidaId}/sesion:
+    get:
+      tags: [Partidas]
+      operationId: recuperarSesion
+      summary: Recuperar una sesión existente
+      description: |-
+        Valida la credencial conservada por el navegador, confirma el rol real y devuelve
+        el estado actual sin crear una partida ni un jugador nuevo.
+      security:
+        - bearerSesion: []
+      x-trazabilidad:
+        casosDeUso: [CU-03]
+        requisitos: [RF-05, RF-16, RF-17, RF-18, RF-90]
+      parameters:
+        - $ref: '#/components/parameters/PartidaId'
+      responses:
+        '200':
+          description: Sesión recuperada correctamente.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SesionRecuperada'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '500':
+          $ref: '#/components/responses/Error500'
+
+  /partidas/{partidaId}/estado:
+    get:
+      tags: [Partidas]
+      operationId: consultarEstadoPartida
+      summary: Consultar el estado actual de la partida
+      description: |-
+        Endpoint ligero para polling. Devuelve una variante según el estado actual.
+        `versionEstado` aumenta cuando cambia información visible y permite ignorar
+        respuestas antiguas.
+
+        Antes de responder, el servidor comprueba si una ronda activa debe cerrarse por
+        tiempo o porque todos los jugadores respondieron. La reconciliación es idempotente.
+      security:
+        - bearerSesion: []
+      x-trazabilidad:
+        casosDeUso: [CU-04, CU-06, CU-07, CU-09]
+        requisitos: [RF-20, RF-21, RF-22, RF-28, RF-30, RF-31, RF-32, RF-33, RF-36, RF-50, RF-51, RF-52, RF-54, RF-92, RF-93, RF-94, RF-96]
+      parameters:
+        - $ref: '#/components/parameters/PartidaId'
+      responses:
+        '200':
+          description: Estado oficial de la partida.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstadoPartida'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '500':
+          $ref: '#/components/responses/Error500'
+
+  /partidas/{partidaId}/iniciar:
+    post:
+      tags: [Partidas]
+      operationId: iniciarPartida
+      summary: Iniciar la partida y activar la primera ronda
+      description: |-
+        Operación exclusiva del anfitrión. Requiere que la partida esté en `LOBBY` y
+        tenga al menos dos jugadores. Una solicitud repetida no crea otra ronda.
+      security:
+        - bearerSesion: []
+      x-trazabilidad:
+        casosDeUso: [CU-05]
+        requisitos: [RF-24, RF-25, RF-26, RF-27, RF-28, RF-29, RF-30, RF-31, RF-33]
+      parameters:
+        - $ref: '#/components/parameters/PartidaId'
+      responses:
+        '200':
+          description: Primera ronda activada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransicionPartida'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          description: Estado incompatible o cantidad insuficiente de jugadores.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorApi'
+              examples:
+                jugadoresInsuficientes:
+                  value:
+                    codigo: JUGADORES_INSUFICIENTES
+                    mensaje: Se necesitan al menos 2 jugadores para iniciar.
+                    marcaTiempo: '2026-10-03T16:02:00Z'
+                estadoIncompatible:
+                  value:
+                    codigo: ESTADO_PARTIDA_INCOMPATIBLE
+                    mensaje: La partida no se encuentra en el lobby.
+                    estadoActual: RONDA_ACTIVA
+                    marcaTiempo: '2026-10-03T16:02:00Z'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+
+  /partidas/{partidaId}/rondas/{rondaId}/estimaciones:
+    post:
+      tags: [Rondas]
+      operationId: enviarEstimacion
+      summary: Enviar la estimación definitiva de un jugador
+      description: |-
+        Operación exclusiva de jugadores. El servidor valida la ronda vigente y su propia
+        hora antes de aceptar. La primera estimación válida es definitiva. Si esta es la
+        última respuesta pendiente, la ronda pasa a `RESULTADOS`, pero esta respuesta no
+        revela todavía la solución ni los puntos.
+      security:
+        - bearerSesion: []
+      x-trazabilidad:
+        casosDeUso: [CU-08, CU-09]
+        requisitos: [RF-37, RF-38, RF-39, RF-40, RF-41, RF-42, RF-43, RF-44, RF-45, RF-46, RF-47, RF-49, RF-50, RF-52, RF-55]
+      parameters:
+        - $ref: '#/components/parameters/PartidaId'
+        - $ref: '#/components/parameters/RondaId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnviarEstimacionSolicitud'
+      responses:
+        '201':
+          description: Estimación aceptada y almacenada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EstimacionAceptada'
+        '400':
+          $ref: '#/components/responses/Error400'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          description: Ronda cerrada, ronda no vigente o estimación duplicada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorApi'
+              examples:
+                rondaCerrada:
+                  value:
+                    codigo: RONDA_CERRADA
+                    mensaje: El tiempo terminó. Tu estimación no fue registrada.
+                    estadoActual: RESULTADOS
+                    marcaTiempo: '2026-10-03T16:03:30Z'
+                rondaNoVigente:
+                  value:
+                    codigo: RONDA_NO_VIGENTE
+                    mensaje: La solicitud no corresponde a la ronda vigente.
+                    rondaActualId: 18
+                    marcaTiempo: '2026-10-03T16:03:12Z'
+                estimacionDuplicada:
+                  value:
+                    codigo: ESTIMACION_DUPLICADA
+                    mensaje: Ya enviaste una estimación para esta ronda.
+                    marcaTiempo: '2026-10-03T16:03:12Z'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+
+  /partidas/{partidaId}/rondas/{rondaId}/resultados:
+    get:
+      tags: [Rondas]
+      operationId: consultarResultadosRonda
+      summary: Consultar los resultados de la ronda vigente cerrada
+      description: |-
+        Disponible únicamente mientras la partida está en `RESULTADOS` y para la ronda
+        indicada por el estado actual. El anfitrión recibe estadísticas generales; cada
+        jugador recibe además solamente su propio resultado individual.
+      security:
+        - bearerSesion: []
+      x-trazabilidad:
+        casosDeUso: [CU-10]
+        requisitos: [RF-59, RF-60, RF-61, RF-62, RF-63, RF-65, RF-66, RF-67, RF-68, RF-69, RF-70, RF-71, RF-72, RF-73, RF-74]
+      parameters:
+        - $ref: '#/components/parameters/PartidaId'
+        - $ref: '#/components/parameters/RondaId'
+      responses:
+        '200':
+          description: Resultados generales y, si corresponde, resultado personal.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultadosRonda'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          description: La ronda no es la ronda de resultados o los resultados aún no están disponibles.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorApi'
+              examples:
+                resultadosNoDisponibles:
+                  value:
+                    codigo: RESULTADOS_NO_DISPONIBLES
+                    mensaje: Los resultados todavía están siendo preparados.
+                    marcaTiempo: '2026-10-03T16:04:00Z'
+                rondaNoVigente:
+                  value:
+                    codigo: RONDA_NO_VIGENTE
+                    mensaje: La ronda solicitada no corresponde a los resultados actuales.
+                    rondaActualId: 18
+                    marcaTiempo: '2026-10-03T16:04:00Z'
+        '500':
+          $ref: '#/components/responses/Error500'
+
+  /partidas/{partidaId}/ranking:
+    get:
+      tags: [Ranking]
+      operationId: consultarRanking
+      summary: Consultar el ranking provisional o final
+      description: |-
+        Disponible después de al menos una ronda cerrada y únicamente cuando la partida
+        está en `RESULTADOS` o `FINALIZADA`. Incluye a todos los jugadores, incluso si no
+        respondieron.
+      security:
+        - bearerSesion: []
+      x-trazabilidad:
+        casosDeUso: [CU-12]
+        requisitos: [RF-75, RF-76, RF-77, RF-78, RF-79, RF-80, RF-89]
+      parameters:
+        - $ref: '#/components/parameters/PartidaId'
+      responses:
+        '200':
+          description: Ranking calculado por el servidor.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Ranking'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          description: Ranking aún no disponible o estado incompatible.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorApi'
+              example:
+                codigo: RANKING_NO_DISPONIBLE
+                mensaje: El ranking estará disponible después de finalizar una ronda.
+                marcaTiempo: '2026-10-03T16:04:00Z'
+        '500':
+          $ref: '#/components/responses/Error500'
+
+  /partidas/{partidaId}/rondas/{rondaId}/avanzar:
+    post:
+      tags: [Partidas]
+      operationId: avanzarRonda
+      summary: Avanzar manualmente a la siguiente ronda
+      description: |-
+        Operación exclusiva del anfitrión. Solo se acepta desde `RESULTADOS` cuando quedan
+        rondas. Activa exactamente la ronda siguiente y nunca salta una ronda.
+      security:
+        - bearerSesion: []
+      x-trazabilidad:
+        casosDeUso: [CU-11]
+        requisitos: [RF-81, RF-82, RF-83, RF-84, RF-85, RF-86, RF-87]
+      parameters:
+        - $ref: '#/components/parameters/PartidaId'
+        - $ref: '#/components/parameters/RondaId'
+      responses:
+        '200':
+          description: Siguiente ronda activada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransicionPartida'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          description: Estado incompatible, ronda desactualizada o no quedan rondas.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorApi'
+              examples:
+                estadoIncompatible:
+                  value:
+                    codigo: ESTADO_PARTIDA_INCOMPATIBLE
+                    mensaje: La ronda actual todavía no ha terminado.
+                    estadoActual: RONDA_ACTIVA
+                    marcaTiempo: '2026-10-03T16:05:00Z'
+                sinRondas:
+                  value:
+                    codigo: SIN_RONDAS_PENDIENTES
+                    mensaje: No quedan más rondas. Puedes finalizar la partida.
+                    marcaTiempo: '2026-10-03T16:05:00Z'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+
+  /partidas/{partidaId}/finalizar:
+    post:
+      tags: [Partidas]
+      operationId: finalizarPartida
+      summary: Finalizar la partida después de la quinta ronda
+      description: |-
+        Operación exclusiva del anfitrión. Requiere que la quinta ronda esté cerrada y que
+        sus resultados estén disponibles. La transición es definitiva e idempotente.
+      security:
+        - bearerSesion: []
+      x-trazabilidad:
+        casosDeUso: [CU-13]
+        requisitos: [RF-88, RF-89, RF-90, RF-91]
+      parameters:
+        - $ref: '#/components/parameters/PartidaId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FinalizarPartidaSolicitud'
+      responses:
+        '200':
+          description: Partida finalizada o finalización previamente completada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartidaFinalizada'
+        '401':
+          $ref: '#/components/responses/Error401'
+        '403':
+          $ref: '#/components/responses/Error403'
+        '404':
+          $ref: '#/components/responses/Error404'
+        '409':
+          description: Estado incompatible, rondas pendientes o resultados no disponibles.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorApi'
+              examples:
+                rondasPendientes:
+                  value:
+                    codigo: RONDAS_PENDIENTES
+                    mensaje: Todavía quedan rondas por jugar.
+                    marcaTiempo: '2026-10-03T16:06:00Z'
+                resultadosNoDisponibles:
+                  value:
+                    codigo: RESULTADOS_NO_DISPONIBLES
+                    mensaje: Los resultados todavía están siendo preparados.
+                    marcaTiempo: '2026-10-03T16:06:00Z'
+        '429':
+          $ref: '#/components/responses/Error429'
+        '500':
+          $ref: '#/components/responses/Error500'
+
+components:
+  securitySchemes:
+    bearerSesion:
+      type: http
+      scheme: bearer
+      bearerFormat: token-opaco
+      description: |-
+        Credencial privada entregada al crear una partida o ingresar como jugador.
+        El servidor determina el rol real asociado con el token. Nunca se envía en la URL.
+
+  parameters:
+    PartidaId:
+      name: partidaId
+      in: path
+      required: true
+      description: Identificador interno de la partida devuelto por la API.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    RondaId:
+      name: rondaId
+      in: path
+      required: true
+      description: Identificador de la ronda devuelto por el estado oficial.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    CodigoPartida:
+      name: codigo
+      in: path
+      required: true
+      description: Código público de cinco caracteres. Se normaliza a mayúsculas.
+      schema:
+        $ref: '#/components/schemas/CodigoPartida'
+
+  responses:
+    Error400:
+      description: Datos de entrada inválidos.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorApi'
+          example:
+            codigo: DATOS_INVALIDOS
+            mensaje: Revisa los datos enviados.
+            detalles:
+              - campo: valor
+                codigo: ENTERO_POSITIVO_REQUERIDO
+                mensaje: Debe ser un número entero mayor que cero.
+            marcaTiempo: '2026-10-03T16:00:00Z'
+    Error401:
+      description: Credencial ausente o inválida.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorApi'
+          example:
+            codigo: CREDENCIAL_INVALIDA
+            mensaje: No fue posible validar tu sesión.
+            marcaTiempo: '2026-10-03T16:00:00Z'
+    Error403:
+      description: La credencial es válida, pero no autoriza la operación o no pertenece a la partida.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorApi'
+          example:
+            codigo: ACCESO_DENEGADO
+            mensaje: No tienes autorización para realizar esta acción.
+            marcaTiempo: '2026-10-03T16:00:00Z'
+    Error404:
+      description: La partida o ronda no existe, expiró o no está disponible.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorApi'
+          example:
+            codigo: PARTIDA_NO_ENCONTRADA
+            mensaje: La partida ya no está disponible.
+            marcaTiempo: '2026-10-03T16:00:00Z'
+    Error429:
+      description: Se superó el límite básico de solicitudes.
+      headers:
+        Retry-After:
+          description: Segundos que deben esperarse antes de reintentar.
+          schema:
+            type: integer
+            minimum: 1
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorApi'
+          example:
+            codigo: LIMITE_SOLICITUDES
+            mensaje: Espera unos segundos antes de intentarlo nuevamente.
+            marcaTiempo: '2026-10-03T16:00:00Z'
+    Error500:
+      description: Error interno sin exposición de detalles técnicos.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorApi'
+          example:
+            codigo: ERROR_INTERNO
+            mensaje: No fue posible completar la operación.
+            marcaTiempo: '2026-10-03T16:00:00Z'
+    Error503:
+      description: API o base de datos temporalmente no disponible.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorApi'
+          example:
+            codigo: SERVICIO_NO_DISPONIBLE
+            mensaje: El servicio no está disponible en este momento.
+            marcaTiempo: '2026-10-03T16:00:00Z'
+
+  schemas:
+    CodigoPartida:
+      type: string
+      minLength: 5
+      maxLength: 5
+      pattern: '^[A-Z0-9]{5}$'
+      example: X7K4P
+
+    TokenSesion:
+      type: string
+      minLength: 32
+      maxLength: 255
+      description: Token opaco, impredecible y sensible que el cliente debe conservar de forma privada.
+      example: hst_7qN2mF9vK4sP8xD3cL6wR1aB5tY0uE7z
+
+    RolSesion:
+      type: string
+      enum: [ANFITRION, JUGADOR]
+
+    EstadoPartidaNombre:
+      type: string
+      enum: [LOBBY, RONDA_ACTIVA, RESULTADOS, FINALIZADA]
+
+    MotivoCierre:
+      type: string
+      enum: [TIEMPO_AGOTADO, TODOS_RESPONDIERON]
+
+    TipoRanking:
+      type: string
+      enum: [PROVISIONAL, FINAL]
+
+    EstadoSalud:
+      type: object
+      additionalProperties: false
+      required: [estado, baseDatos, servidorAhora]
+      properties:
+        estado:
+          type: string
+          const: DISPONIBLE
+        baseDatos:
+          type: string
+          const: DISPONIBLE
+        servidorAhora:
+          type: string
+          format: date-time
+      example:
+        estado: DISPONIBLE
+        baseDatos: DISPONIBLE
+        servidorAhora: '2026-10-03T16:00:00Z'
+
+    PartidaCreada:
+      type: object
+      additionalProperties: false
+      required:
+        - partidaId
+        - codigo
+        - estado
+        - totalRondas
+        - duracionRondaSegundos
+        - maximoJugadores
+        - tokenAnfitrion
+      properties:
+        partidaId:
+          type: integer
+          format: int64
+          minimum: 1
+        codigo:
+          $ref: '#/components/schemas/CodigoPartida'
+        estado:
+          type: string
+          const: LOBBY
+        totalRondas:
+          type: integer
+          const: 5
+        duracionRondaSegundos:
+          type: integer
+          const: 30
+        maximoJugadores:
+          type: integer
+          const: 40
+        tokenAnfitrion:
+          $ref: '#/components/schemas/TokenSesion'
+      example:
+        partidaId: 42
+        codigo: X7K4P
+        estado: LOBBY
+        totalRondas: 5
+        duracionRondaSegundos: 30
+        maximoJugadores: 40
+        tokenAnfitrion: hst_7qN2mF9vK4sP8xD3cL6wR1aB5tY0uE7z
+
+    IngresarJugadorSolicitud:
+      type: object
+      additionalProperties: false
+      required: [nombre]
+      properties:
+        nombre:
+          type: string
+          minLength: 2
+          maxLength: 20
+          description: Nombre visible después de eliminar espacios exteriores.
+          example: María
+
+    JugadorResumen:
+      type: object
+      additionalProperties: false
+      required: [jugadorId, nombre]
+      properties:
+        jugadorId:
+          type: integer
+          format: int64
+          minimum: 1
+        nombre:
+          type: string
+          minLength: 2
+          maxLength: 20
+
+    JugadorIngresado:
+      type: object
+      additionalProperties: false
+      required: [partidaId, codigo, estado, jugador, tokenJugador]
+      properties:
+        partidaId:
+          type: integer
+          format: int64
+          minimum: 1
+        codigo:
+          $ref: '#/components/schemas/CodigoPartida'
+        estado:
+          type: string
+          const: LOBBY
+        jugador:
+          $ref: '#/components/schemas/JugadorResumen'
+        tokenJugador:
+          $ref: '#/components/schemas/TokenSesion'
+      example:
+        partidaId: 42
+        codigo: X7K4P
+        estado: LOBBY
+        jugador:
+          jugadorId: 105
+          nombre: María
+        tokenJugador: ply_4dH8nQ2xV6cB9mK3sF7wR1aT5yU0pL8z
+
+    SesionRecuperada:
+      type: object
+      additionalProperties: false
+      required: [rol, estadoPartida]
+      properties:
+        rol:
+          $ref: '#/components/schemas/RolSesion'
+        jugador:
+          oneOf:
+            - $ref: '#/components/schemas/JugadorResumen'
+            - type: 'null'
+          description: Es nulo cuando la sesión corresponde al anfitrión.
+        estadoPartida:
+          $ref: '#/components/schemas/EstadoPartida'
+
+    EstadoComun:
+      type: object
+      additionalProperties: true
+      required:
+        - partidaId
+        - codigo
+        - estado
+        - versionEstado
+        - servidorAhora
+        - rol
+        - pollingSugeridoMs
+      properties:
+        partidaId:
+          type: integer
+          format: int64
+          minimum: 1
+        codigo:
+          $ref: '#/components/schemas/CodigoPartida'
+        estado:
+          $ref: '#/components/schemas/EstadoPartidaNombre'
+        versionEstado:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Versión monotónica de la información visible de la partida.
+        servidorAhora:
+          type: string
+          format: date-time
+        rol:
+          $ref: '#/components/schemas/RolSesion'
+        pollingSugeridoMs:
+          type: integer
+          minimum: 1000
+          example: 2000
+
+    LobbyDetalle:
+      type: object
+      additionalProperties: false
+      required:
+        - cantidadJugadores
+        - minimoJugadores
+        - maximoJugadores
+        - puedeIniciar
+        - jugadores
+      properties:
+        cantidadJugadores:
+          type: integer
+          minimum: 0
+          maximum: 40
+        minimoJugadores:
+          type: integer
+          const: 2
+        maximoJugadores:
+          type: integer
+          const: 40
+        puedeIniciar:
+          type: boolean
+          description: Solo puede ser verdadero para el anfitrión cuando hay al menos dos jugadores.
+        jugadores:
+          type: array
+          maxItems: 40
+          items:
+            $ref: '#/components/schemas/JugadorResumen'
+
+    EstadoLobby:
+      allOf:
+        - $ref: '#/components/schemas/EstadoComun'
+        - type: object
+          required: [estado, lobby]
+          properties:
+            estado:
+              type: string
+              const: LOBBY
+            lobby:
+              $ref: '#/components/schemas/LobbyDetalle'
+      example:
+        partidaId: 42
+        codigo: X7K4P
+        estado: LOBBY
+        versionEstado: 4
+        servidorAhora: '2026-10-03T16:01:00Z'
+        rol: ANFITRION
+        pollingSugeridoMs: 2000
+        lobby:
+          cantidadJugadores: 2
+          minimoJugadores: 2
+          maximoJugadores: 40
+          puedeIniciar: true
+          jugadores:
+            - jugadorId: 105
+              nombre: María
+            - jugadorId: 106
+              nombre: Carlos
+
+    ParticipacionRonda:
+      type: object
+      additionalProperties: false
+      required: [respondio]
+      properties:
+        respondio:
+          type: boolean
+        estimacion:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+          description: Solo aparece si el jugador ya respondió.
+        recibidaEn:
+          type: string
+          format: date-time
+          description: Solo aparece si el jugador ya respondió.
+
+    RondaActivaPublica:
+      type: object
+      additionalProperties: false
+      required:
+        - rondaId
+        - numero
+        - totalRondas
+        - enunciado
+        - unidad
+        - iniciadaEn
+        - finalizaEn
+      properties:
+        rondaId:
+          type: integer
+          format: int64
+          minimum: 1
+        numero:
+          type: integer
+          minimum: 1
+          maximum: 5
+        totalRondas:
+          type: integer
+          const: 5
+        enunciado:
+          type: string
+          minLength: 1
+        unidad:
+          type: string
+          minLength: 1
+        iniciadaEn:
+          type: string
+          format: date-time
+        finalizaEn:
+          type: string
+          format: date-time
+        participacion:
+          oneOf:
+            - $ref: '#/components/schemas/ParticipacionRonda'
+            - type: 'null'
+          description: Es nulo para el anfitrión y personal para el jugador autenticado.
+
+    EstadoRondaActiva:
+      allOf:
+        - $ref: '#/components/schemas/EstadoComun'
+        - type: object
+          required: [estado, ronda]
+          properties:
+            estado:
+              type: string
+              const: RONDA_ACTIVA
+            ronda:
+              $ref: '#/components/schemas/RondaActivaPublica'
+      example:
+        partidaId: 42
+        codigo: X7K4P
+        estado: RONDA_ACTIVA
+        versionEstado: 5
+        servidorAhora: '2026-10-03T16:02:05Z'
+        rol: JUGADOR
+        pollingSugeridoMs: 2000
+        ronda:
+          rondaId: 17
+          numero: 1
+          totalRondas: 5
+          enunciado: ¿Cuántos kilómetros mide aproximadamente la circunferencia de la Tierra?
+          unidad: km
+          iniciadaEn: '2026-10-03T16:02:00Z'
+          finalizaEn: '2026-10-03T16:02:30Z'
+          participacion:
+            respondio: false
+
+    ResumenEstadoResultados:
+      type: object
+      additionalProperties: false
+      required: [rondaId, numero, resultadosDisponibles, puedeAvanzar, puedeFinalizar]
+      properties:
+        rondaId:
+          type: integer
+          format: int64
+          minimum: 1
+        numero:
+          type: integer
+          minimum: 1
+          maximum: 5
+        resultadosDisponibles:
+          type: boolean
+        puedeAvanzar:
+          type: boolean
+          description: Verdadero solo para el anfitrión, con resultados listos y rondas pendientes.
+        puedeFinalizar:
+          type: boolean
+          description: Verdadero solo para el anfitrión después de los resultados de la quinta ronda.
+
+    EstadoResultados:
+      allOf:
+        - $ref: '#/components/schemas/EstadoComun'
+        - type: object
+          required: [estado, resultados]
+          properties:
+            estado:
+              type: string
+              const: RESULTADOS
+            resultados:
+              $ref: '#/components/schemas/ResumenEstadoResultados'
+
+    EstadoFinalizada:
+      allOf:
+        - $ref: '#/components/schemas/EstadoComun'
+        - type: object
+          required: [estado, finalizadaEn, rankingDisponible]
+          properties:
+            estado:
+              type: string
+              const: FINALIZADA
+            finalizadaEn:
+              type: string
+              format: date-time
+            rankingDisponible:
+              type: boolean
+              const: true
+
+    EstadoPartida:
+      oneOf:
+        - $ref: '#/components/schemas/EstadoLobby'
+        - $ref: '#/components/schemas/EstadoRondaActiva'
+        - $ref: '#/components/schemas/EstadoResultados'
+        - $ref: '#/components/schemas/EstadoFinalizada'
+      discriminator:
+        propertyName: estado
+        mapping:
+          LOBBY: '#/components/schemas/EstadoLobby'
+          RONDA_ACTIVA: '#/components/schemas/EstadoRondaActiva'
+          RESULTADOS: '#/components/schemas/EstadoResultados'
+          FINALIZADA: '#/components/schemas/EstadoFinalizada'
+
+    TransicionPartida:
+      type: object
+      additionalProperties: false
+      required: [mensaje, estadoPartida]
+      properties:
+        mensaje:
+          type: string
+        estadoPartida:
+          $ref: '#/components/schemas/EstadoPartida'
+
+    EnviarEstimacionSolicitud:
+      type: object
+      additionalProperties: false
+      required: [valor]
+      properties:
+        valor:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+          description: Entero positivo dentro del rango seguro de JavaScript.
+          example: 35000
+
+    EstimacionAceptada:
+      type: object
+      additionalProperties: false
+      required:
+        - estimacionId
+        - partidaId
+        - rondaId
+        - valor
+        - recibidaEn
+        - estadoPartida
+        - mensaje
+      properties:
+        estimacionId:
+          type: integer
+          format: int64
+          minimum: 1
+        partidaId:
+          type: integer
+          format: int64
+          minimum: 1
+        rondaId:
+          type: integer
+          format: int64
+          minimum: 1
+        valor:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+        recibidaEn:
+          type: string
+          format: date-time
+        estadoPartida:
+          type: string
+          enum: [RONDA_ACTIVA, RESULTADOS]
+        mensaje:
+          type: string
+      example:
+        estimacionId: 300
+        partidaId: 42
+        rondaId: 17
+        valor: 35000
+        recibidaEn: '2026-10-03T16:02:18Z'
+        estadoPartida: RONDA_ACTIVA
+        mensaje: Tu estimación fue registrada correctamente.
+
+    EstadisticasRonda:
+      type: object
+      additionalProperties: false
+      required:
+        - hayRespuestas
+        - cantidadRespuestas
+        - totalJugadores
+        - estimacionMinima
+        - promedio
+        - estimacionMaxima
+      properties:
+        hayRespuestas:
+          type: boolean
+        cantidadRespuestas:
+          type: integer
+          minimum: 0
+          maximum: 40
+        totalJugadores:
+          type: integer
+          minimum: 2
+          maximum: 40
+        estimacionMinima:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 9007199254740991
+        promedio:
+          type: [number, 'null']
+          minimum: 1
+        estimacionMaxima:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 9007199254740991
+
+    ResultadoPersonal:
+      type: object
+      additionalProperties: false
+      required: [respondio, estimacion, diferenciaAbsoluta, puntos]
+      properties:
+        respondio:
+          type: boolean
+        estimacion:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 9007199254740991
+        diferenciaAbsoluta:
+          type: [integer, 'null']
+          minimum: 0
+          maximum: 9007199254740991
+        puntos:
+          type: integer
+          minimum: 0
+      description: Si el jugador no respondió, estimación y diferencia son nulas y los puntos son cero.
+
+    ResultadosRonda:
+      type: object
+      additionalProperties: false
+      required:
+        - partidaId
+        - rondaId
+        - numero
+        - totalRondas
+        - enunciado
+        - unidad
+        - respuestaCorrecta
+        - motivoCierre
+        - cerradaEn
+        - estadisticas
+        - resultadoPersonal
+        - servidorAhora
+      properties:
+        partidaId:
+          type: integer
+          format: int64
+          minimum: 1
+        rondaId:
+          type: integer
+          format: int64
+          minimum: 1
+        numero:
+          type: integer
+          minimum: 1
+          maximum: 5
+        totalRondas:
+          type: integer
+          const: 5
+        enunciado:
+          type: string
+          minLength: 1
+        unidad:
+          type: string
+          minLength: 1
+        respuestaCorrecta:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+        motivoCierre:
+          $ref: '#/components/schemas/MotivoCierre'
+        cerradaEn:
+          type: string
+          format: date-time
+        estadisticas:
+          $ref: '#/components/schemas/EstadisticasRonda'
+        resultadoPersonal:
+          oneOf:
+            - $ref: '#/components/schemas/ResultadoPersonal'
+            - type: 'null'
+          description: Es nulo para el anfitrión.
+        explicacion:
+          type: string
+          description: Campo opcional disponible solamente después del cierre.
+        fuente:
+          type: string
+          format: uri
+          description: Fuente opcional del dato correcto.
+        servidorAhora:
+          type: string
+          format: date-time
+      example:
+        partidaId: 42
+        rondaId: 17
+        numero: 1
+        totalRondas: 5
+        enunciado: ¿Cuántos kilómetros mide aproximadamente la circunferencia de la Tierra?
+        unidad: km
+        respuestaCorrecta: 40075
+        motivoCierre: TIEMPO_AGOTADO
+        cerradaEn: '2026-10-03T16:02:30Z'
+        estadisticas:
+          hayRespuestas: true
+          cantidadRespuestas: 2
+          totalJugadores: 2
+          estimacionMinima: 35000
+          promedio: 37500
+          estimacionMaxima: 40000
+        resultadoPersonal:
+          respondio: true
+          estimacion: 35000
+          diferenciaAbsoluta: 5075
+          puntos: 873
+        servidorAhora: '2026-10-03T16:02:31Z'
+
+    EntradaRanking:
+      type: object
+      additionalProperties: false
+      required: [posicion, jugadorId, nombre, puntosTotales, esJugadorActual]
+      properties:
+        posicion:
+          type: integer
+          minimum: 1
+          description: Los jugadores con igual puntuación comparten la misma posición.
+        jugadorId:
+          type: integer
+          format: int64
+          minimum: 1
+        nombre:
+          type: string
+          minLength: 2
+          maxLength: 20
+        puntosTotales:
+          type: integer
+          minimum: 0
+        esJugadorActual:
+          type: boolean
+          description: Siempre es falso para una sesión de anfitrión.
+
+    Ranking:
+      type: object
+      additionalProperties: false
+      required:
+        - partidaId
+        - tipo
+        - rondasCompletadas
+        - totalRondas
+        - posiciones
+        - servidorAhora
+      properties:
+        partidaId:
+          type: integer
+          format: int64
+          minimum: 1
+        tipo:
+          $ref: '#/components/schemas/TipoRanking'
+        rondasCompletadas:
+          type: integer
+          minimum: 1
+          maximum: 5
+        totalRondas:
+          type: integer
+          const: 5
+        posiciones:
+          type: array
+          minItems: 2
+          maxItems: 40
+          items:
+            $ref: '#/components/schemas/EntradaRanking'
+        servidorAhora:
+          type: string
+          format: date-time
+      example:
+        partidaId: 42
+        tipo: PROVISIONAL
+        rondasCompletadas: 1
+        totalRondas: 5
+        posiciones:
+          - posicion: 1
+            jugadorId: 106
+            nombre: Carlos
+            puntosTotales: 995
+            esJugadorActual: false
+          - posicion: 2
+            jugadorId: 105
+            nombre: María
+            puntosTotales: 873
+            esJugadorActual: true
+        servidorAhora: '2026-10-03T16:02:31Z'
+
+    FinalizarPartidaSolicitud:
+      type: object
+      additionalProperties: false
+      required: [rondaId]
+      properties:
+        rondaId:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Identificador de la quinta ronda cerrada.
+
+    PartidaFinalizada:
+      type: object
+      additionalProperties: false
+      required: [mensaje, estado, finalizadaEn, ranking]
+      properties:
+        mensaje:
+          type: string
+        estado:
+          type: string
+          const: FINALIZADA
+        finalizadaEn:
+          type: string
+          format: date-time
+        ranking:
+          $ref: '#/components/schemas/Ranking'
+
+    DetalleError:
+      type: object
+      additionalProperties: false
+      required: [codigo, mensaje]
+      properties:
+        campo:
+          type: string
+        codigo:
+          type: string
+        mensaje:
+          type: string
+
+    CodigoError:
+      type: string
+      enum:
+        - DATOS_INVALIDOS
+        - PARTIDA_NO_ENCONTRADA
+        - PARTIDA_NO_DISPONIBLE
+        - PARTIDA_LLENA
+        - NOMBRE_OCUPADO
+        - CREDENCIAL_INVALIDA
+        - ACCESO_DENEGADO
+        - JUGADORES_INSUFICIENTES
+        - DESAFIOS_INSUFICIENTES
+        - ESTADO_PARTIDA_INCOMPATIBLE
+        - RONDA_NO_VIGENTE
+        - RONDA_CERRADA
+        - ESTIMACION_DUPLICADA
+        - RESULTADOS_NO_DISPONIBLES
+        - RANKING_NO_DISPONIBLE
+        - SIN_RONDAS_PENDIENTES
+        - RONDAS_PENDIENTES
+        - LIMITE_SOLICITUDES
+        - ERROR_INTERNO
+        - SERVICIO_NO_DISPONIBLE
+
+    ErrorApi:
+      type: object
+      additionalProperties: false
+      required: [codigo, mensaje, marcaTiempo]
+      properties:
+        codigo:
+          $ref: '#/components/schemas/CodigoError'
+        mensaje:
+          type: string
+          minLength: 1
+        detalles:
+          type: array
+          items:
+            $ref: '#/components/schemas/DetalleError'
+        estadoActual:
+          $ref: '#/components/schemas/EstadoPartidaNombre'
+        rondaActualId:
+          type: integer
+          format: int64
+          minimum: 1
+        marcaTiempo:
+          type: string
+          format: date-time
