@@ -32,8 +32,14 @@ public sealed class PartidasController(IPartidasServicio partidas) : ControllerB
 
     [HttpGet("{partidaId:long}/estado")]
     [Authorize]
-    public Task<EstadoLobby> ConsultarEstado(long partidaId, CancellationToken cancellationToken) =>
+    public Task<object> ConsultarEstado(long partidaId, CancellationToken cancellationToken) =>
         partidas.ConsultarEstadoAsync(partidaId, ObtenerSesion(), cancellationToken);
+
+    [HttpPost("{partidaId:long}/iniciar")]
+    [Authorize(Roles = "ANFITRION")]
+    [EnableRateLimiting("control")]
+    public Task<TransicionPartida> Iniciar(long partidaId, CancellationToken cancellationToken) =>
+        partidas.IniciarAsync(partidaId, ObtenerSesion(), cancellationToken);
 
     private SesionActual ObtenerSesion()
     {

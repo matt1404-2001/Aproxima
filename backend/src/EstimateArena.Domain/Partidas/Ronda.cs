@@ -9,6 +9,8 @@ public sealed class Ronda
     public long DesafioId { get; set; }
     public int Numero { get; set; }
     public EstadoRonda Estado { get; set; } = EstadoRonda.PENDIENTE;
+    public DateTimeOffset? FechaInicio { get; set; }
+    public DateTimeOffset? FechaLimite { get; set; }
     public Partida Partida { get; set; } = null!;
     public Desafio Desafio { get; set; } = null!;
 }

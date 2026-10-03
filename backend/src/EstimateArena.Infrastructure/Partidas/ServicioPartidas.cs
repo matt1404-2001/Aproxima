@@ -92,7 +92,27 @@ public sealed class ServicioPartidas(
         return new SesionRecuperada(sesion.Rol, jugador, estado);
     }
 
-    public async Task<EstadoLobby> ConsultarEstadoAsync(long partidaId, SesionActual sesion, CancellationToken cancellationToken)
+    public async Task<TransicionPartida> IniciarAsync(long partidaId, SesionActual sesion, CancellationToken cancellationToken)
+    {
+        ValidarSesionPartida(partidaId, sesion);
+        if (sesion.Rol != "ANFITRION") throw new ExcepcionNegocio(403, "ACCESO_DENEGADO", "No tienes autorizacion para realizar esta accion.");
+        await using var transaccion = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var partida = await dbContext.Partidas.Include(x => x.Jugadores).Include(x => x.Rondas).ThenInclude(x => x.Desafio).SingleOrDefaultAsync(x => x.Id == partidaId, cancellationToken) ?? throw NoEncontrada();
+        if (partida.Estado != EstadoPartida.LOBBY) throw Conflicto("ESTADO_PARTIDA_INCOMPATIBLE", "La partida no se encuentra en el lobby.");
+        if (partida.Jugadores.Count < 2) throw Conflicto("JUGADORES_INSUFICIENTES", "Se necesitan al menos 2 jugadores para iniciar.");
+        var ronda = partida.Rondas.SingleOrDefault(x => x.Numero == 1 && x.Estado == EstadoRonda.PENDIENTE) ?? throw Conflicto("ESTADO_PARTIDA_INCOMPATIBLE", "La partida no se encuentra en el lobby.");
+        var ahora = timeProvider.GetUtcNow();
+        ronda.Estado = EstadoRonda.ACTIVA;
+        ronda.FechaInicio = ahora;
+        ronda.FechaLimite = ahora.AddSeconds(partida.DuracionRondaSegundos);
+        partida.Estado = EstadoPartida.RONDA_ACTIVA;
+        partida.VersionEstado++;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaccion.CommitAsync(cancellationToken);
+        return new TransicionPartida("La partida ha comenzado.", CrearEstadoRonda(partida, ronda, sesion, ahora));
+    }
+
+    public async Task<object> ConsultarEstadoAsync(long partidaId, SesionActual sesion, CancellationToken cancellationToken)
     {
         ValidarSesionPartida(partidaId, sesion);
         var partida = await dbContext.Partidas.AsNoTracking().Include(x => x.Jugadores).SingleOrDefaultAsync(x => x.Id == partidaId, cancellationToken)
@@ -102,15 +122,22 @@ public sealed class ServicioPartidas(
             throw NoEncontrada();
         }
 
-        if (partida.Estado != EstadoPartida.LOBBY)
+        if (partida.Estado == EstadoPartida.RONDA_ACTIVA)
         {
-            throw Conflicto("ESTADO_PARTIDA_INCOMPATIBLE", "La partida no se encuentra en el lobby.");
+            var ronda = await dbContext.Rondas.AsNoTracking().Include(x => x.Desafio).SingleAsync(x => x.PartidaId == partidaId && x.Estado == EstadoRonda.ACTIVA, cancellationToken);
+            return CrearEstadoRonda(partida, ronda, sesion, timeProvider.GetUtcNow());
         }
+
+        if (partida.Estado != EstadoPartida.LOBBY) throw Conflicto("ESTADO_PARTIDA_INCOMPATIBLE", "La partida no se encuentra en el lobby.");
 
         var jugadores = partida.Jugadores.OrderBy(x => x.Id).Select(x => new JugadorResumen(x.Id, x.Nombre)).ToArray();
         return new EstadoLobby(partida.Id, partida.Codigo, partida.Estado.ToString(), partida.VersionEstado, timeProvider.GetUtcNow(), sesion.Rol, 2000,
             new LobbyDetalle(jugadores.Length, 2, partida.MaximoJugadores, sesion.Rol == "ANFITRION" && jugadores.Length >= 2, jugadores));
     }
+
+    private static EstadoRondaActiva CrearEstadoRonda(Partida partida, Ronda ronda, SesionActual sesion, DateTimeOffset ahora) =>
+        new(partida.Id, partida.Codigo, partida.Estado.ToString(), partida.VersionEstado, ahora, sesion.Rol, 2000,
+            new RondaActiva(ronda.Id, ronda.Numero, partida.CantidadRondas, ronda.Desafio.Pregunta, ronda.Desafio.Unidad, ronda.FechaInicio!.Value, ronda.FechaLimite!.Value, null));
 
     private async Task<string> GenerarCodigoAsync(CancellationToken cancellationToken)
     {
