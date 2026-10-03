@@ -8,6 +8,8 @@ public interface IPartidasServicio
     Task<EstimacionAceptada> EnviarEstimacionAsync(long partidaId, long rondaId, long valor, SesionActual sesion, CancellationToken cancellationToken);
     Task<ResultadosRonda> ConsultarResultadosAsync(long partidaId, long rondaId, SesionActual sesion, CancellationToken cancellationToken);
     Task<RankingPartida> ConsultarRankingAsync(long partidaId, SesionActual sesion, CancellationToken cancellationToken);
+    Task<TransicionPartida> AvanzarAsync(long partidaId, long rondaId, SesionActual sesion, CancellationToken cancellationToken);
+    Task<PartidaFinalizada> FinalizarAsync(long partidaId, long rondaId, SesionActual sesion, CancellationToken cancellationToken);
     Task<SesionRecuperada> RecuperarSesionAsync(long partidaId, SesionActual sesion, CancellationToken cancellationToken);
     Task<object> ConsultarEstadoAsync(long partidaId, SesionActual sesion, CancellationToken cancellationToken);
 }
@@ -28,3 +30,4 @@ public sealed record EstadisticasRonda(bool HayRespuestas, int CantidadRespuesta
 public sealed record ResultadoPersonal(bool Respondio, long? Estimacion, long? DiferenciaAbsoluta, int Puntos);
 public sealed record RankingPartida(long PartidaId, string Tipo, int RondasCompletadas, int TotalRondas, IReadOnlyList<EntradaRanking> Posiciones, DateTimeOffset ServidorAhora);
 public sealed record EntradaRanking(int Posicion, long JugadorId, string Nombre, int PuntosTotales, bool EsJugadorActual);
+public sealed record PartidaFinalizada(string Mensaje, string Estado, DateTimeOffset FinalizadaEn, RankingPartida Ranking);
