@@ -10,6 +10,7 @@ public sealed class EstimateArenaDbContext(DbContextOptions<EstimateArenaDbConte
     public DbSet<Jugador> Jugadores => Set<Jugador>();
     public DbSet<Desafio> Desafios => Set<Desafio>();
     public DbSet<Ronda> Rondas => Set<Ronda>();
+    public DbSet<Estimacion> Estimaciones => Set<Estimacion>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

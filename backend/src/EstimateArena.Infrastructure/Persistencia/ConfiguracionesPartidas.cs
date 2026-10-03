@@ -53,6 +53,7 @@ internal sealed class DesafioConfiguracion : IEntityTypeConfiguration<Desafio>
         builder.Property(x => x.Pregunta).HasColumnName("pregunta").HasMaxLength(500).IsRequired();
         builder.HasIndex(x => x.Pregunta).IsUnique().HasDatabaseName("uq_desafios_pregunta");
         builder.Property(x => x.RespuestaCorrecta).HasColumnName("respuesta_correcta");
+        builder.Property(x => x.MargenPuntuacion).HasColumnName("margen_puntuacion");
         builder.Property(x => x.Unidad).HasColumnName("unidad").HasMaxLength(60).IsRequired();
         builder.Property(x => x.Explicacion).HasColumnName("explicacion").HasMaxLength(1000);
         builder.Property(x => x.FuenteUrl).HasColumnName("fuente_url").HasMaxLength(500);
@@ -73,9 +74,29 @@ internal sealed class RondaConfiguracion : IEntityTypeConfiguration<Ronda>
         builder.Property(x => x.Estado).HasColumnName("estado").HasConversion<string>().HasMaxLength(20);
         builder.Property(x => x.FechaInicio).HasColumnName("fecha_inicio").HasPrecision(3);
         builder.Property(x => x.FechaLimite).HasColumnName("fecha_limite").HasPrecision(3);
+        builder.Property(x => x.FechaCierre).HasColumnName("fecha_cierre").HasPrecision(3);
+        builder.Property(x => x.MotivoCierre).HasColumnName("motivo_cierre").HasMaxLength(24);
         builder.HasIndex(x => new { x.PartidaId, x.Numero }).IsUnique().HasDatabaseName("uq_rondas_numero_partida");
         builder.HasIndex(x => new { x.PartidaId, x.DesafioId }).IsUnique().HasDatabaseName("uq_rondas_desafio_partida");
         builder.HasOne(x => x.Partida).WithMany(x => x.Rondas).HasForeignKey(x => x.PartidaId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne(x => x.Desafio).WithMany().HasForeignKey(x => x.DesafioId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class EstimacionConfiguracion : IEntityTypeConfiguration<Estimacion>
+{
+    public void Configure(EntityTypeBuilder<Estimacion> builder)
+    {
+        builder.ToTable("estimaciones");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Id).HasColumnName("id_estimacion");
+        builder.Property(x => x.RondaId).HasColumnName("id_ronda");
+        builder.Property(x => x.JugadorId).HasColumnName("id_jugador");
+        builder.Property(x => x.Valor).HasColumnName("valor_estimado");
+        builder.Property(x => x.FechaRecepcion).HasColumnName("fecha_recepcion").HasPrecision(3);
+        builder.Property(x => x.DiferenciaAbsoluta).HasColumnName("diferencia_absoluta");
+        builder.Property(x => x.PuntosObtenidos).HasColumnName("puntos_obtenidos");
+        builder.Property(x => x.FechaCalculo).HasColumnName("fecha_calculo").HasPrecision(3);
+        builder.HasIndex(x => new { x.RondaId, x.JugadorId }).IsUnique().HasDatabaseName("uq_estimaciones_jugador_ronda");
     }
 }

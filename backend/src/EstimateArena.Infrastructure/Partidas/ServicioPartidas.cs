@@ -112,6 +112,74 @@ public sealed class ServicioPartidas(
         return new TransicionPartida("La partida ha comenzado.", CrearEstadoRonda(partida, ronda, sesion, ahora));
     }
 
+    public async Task<EstimacionAceptada> EnviarEstimacionAsync(long partidaId, long rondaId, long valor, SesionActual sesion, CancellationToken cancellationToken)
+    {
+        ValidarSesionPartida(partidaId, sesion);
+        if (sesion.JugadorId is not long jugadorId) throw new ExcepcionNegocio(403, "ACCESO_DENEGADO", "No tienes autorizacion para realizar esta accion.");
+        if (valor < 1) throw DatoInvalido("valor", "Debe ser un numero entero mayor que cero.");
+        await using var transaccion = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var partida = await dbContext.Partidas.SingleOrDefaultAsync(x => x.Id == partidaId, cancellationToken) ?? throw NoEncontrada();
+        if (partida.Estado != EstadoPartida.RONDA_ACTIVA) throw Conflicto("RONDA_CERRADA", "El tiempo termino. Tu estimacion no fue registrada.");
+        var ronda = await dbContext.Rondas.SingleOrDefaultAsync(x => x.Id == rondaId && x.PartidaId == partidaId && x.Estado == EstadoRonda.ACTIVA, cancellationToken);
+        if (ronda is null) throw Conflicto("RONDA_NO_VIGENTE", "La solicitud no corresponde a la ronda vigente.");
+        var ahora = timeProvider.GetUtcNow();
+        if (ahora >= ronda.FechaLimite) throw Conflicto("RONDA_CERRADA", "El tiempo termino. Tu estimacion no fue registrada.");
+        if (await dbContext.Estimaciones.AnyAsync(x => x.RondaId == rondaId && x.JugadorId == jugadorId, cancellationToken)) throw Conflicto("ESTIMACION_DUPLICADA", "Ya enviaste una estimacion para esta ronda.");
+        var estimacion = new Estimacion { RondaId = rondaId, JugadorId = jugadorId, Valor = valor, FechaRecepcion = ahora };
+        dbContext.Estimaciones.Add(estimacion);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        var totalJugadores = await dbContext.Jugadores.CountAsync(x => x.PartidaId == partidaId, cancellationToken);
+        var totalRespuestas = await dbContext.Estimaciones.CountAsync(x => x.RondaId == rondaId, cancellationToken);
+        if (totalRespuestas == totalJugadores)
+        {
+            await CerrarRondaAsync(partida, ronda, "TODOS_RESPONDIERON", ahora, cancellationToken);
+        }
+        await transaccion.CommitAsync(cancellationToken);
+        return new EstimacionAceptada(estimacion.Id, partidaId, rondaId, valor, ahora, partida.Estado.ToString(), "Tu estimacion fue registrada correctamente.");
+    }
+
+    public async Task<ResultadosRonda> ConsultarResultadosAsync(long partidaId, long rondaId, SesionActual sesion, CancellationToken cancellationToken)
+    {
+        ValidarSesionPartida(partidaId, sesion);
+        var partida = await dbContext.Partidas.SingleOrDefaultAsync(x => x.Id == partidaId, cancellationToken) ?? throw NoEncontrada();
+        var ronda = await dbContext.Rondas.Include(x => x.Desafio).SingleOrDefaultAsync(x => x.Id == rondaId && x.PartidaId == partidaId, cancellationToken)
+            ?? throw new ExcepcionNegocio(404, "PARTIDA_NO_ENCONTRADA", "La partida ya no esta disponible.");
+        if (partida.Estado == EstadoPartida.RONDA_ACTIVA && ronda.Estado == EstadoRonda.ACTIVA && timeProvider.GetUtcNow() >= ronda.FechaLimite)
+        {
+            await CerrarRondaAsync(partida, ronda, "TIEMPO_AGOTADO", timeProvider.GetUtcNow(), cancellationToken);
+        }
+        if (partida.Estado != EstadoPartida.RESULTADOS || ronda.Estado != EstadoRonda.CERRADA) throw Conflicto("RESULTADOS_NO_DISPONIBLES", "Los resultados todavia estan siendo preparados.");
+        var estimaciones = await dbContext.Estimaciones.AsNoTracking().Where(x => x.RondaId == rondaId).ToListAsync(cancellationToken);
+        var totalJugadores = await dbContext.Jugadores.CountAsync(x => x.PartidaId == partidaId, cancellationToken);
+        var personal = sesion.JugadorId is long jugadorId ? estimaciones.SingleOrDefault(x => x.JugadorId == jugadorId) : null;
+        var estadisticas = estimaciones.Count == 0
+            ? new EstadisticasRonda(false, 0, totalJugadores, null, null, null)
+            : new EstadisticasRonda(true, estimaciones.Count, totalJugadores, estimaciones.Min(x => x.Valor), estimaciones.Average(x => (decimal)x.Valor), estimaciones.Max(x => x.Valor));
+        return new ResultadosRonda(partidaId, rondaId, ronda.Numero, partida.CantidadRondas, ronda.Desafio.Pregunta, ronda.Desafio.Unidad, ronda.Desafio.RespuestaCorrecta,
+            ronda.MotivoCierre!, ronda.FechaCierre!.Value, estadisticas,
+            sesion.JugadorId is null ? null : new ResultadoPersonal(personal is not null, personal?.Valor, personal?.DiferenciaAbsoluta, personal?.PuntosObtenidos ?? 0), timeProvider.GetUtcNow());
+    }
+
+    private async Task CerrarRondaAsync(Partida partida, Ronda ronda, string motivo, DateTimeOffset ahora, CancellationToken cancellationToken)
+    {
+        if (ronda.Estado != EstadoRonda.ACTIVA) return;
+        var desafio = await dbContext.Desafios.SingleAsync(x => x.Id == ronda.DesafioId, cancellationToken);
+        var estimaciones = await dbContext.Estimaciones.Where(x => x.RondaId == ronda.Id).ToListAsync(cancellationToken);
+        foreach (var estimacion in estimaciones)
+        {
+            var diferencia = decimal.Abs((decimal)estimacion.Valor - desafio.RespuestaCorrecta);
+            estimacion.DiferenciaAbsoluta = decimal.ToInt64(diferencia);
+            estimacion.PuntosObtenidos = (int)decimal.Round(1000m * decimal.Max(0m, 1m - diferencia / desafio.MargenPuntuacion), 0, MidpointRounding.AwayFromZero);
+            estimacion.FechaCalculo = ahora;
+        }
+        ronda.Estado = EstadoRonda.CERRADA;
+        ronda.FechaCierre = ahora;
+        ronda.MotivoCierre = motivo;
+        partida.Estado = EstadoPartida.RESULTADOS;
+        partida.VersionEstado++;
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task<object> ConsultarEstadoAsync(long partidaId, SesionActual sesion, CancellationToken cancellationToken)
     {
         ValidarSesionPartida(partidaId, sesion);

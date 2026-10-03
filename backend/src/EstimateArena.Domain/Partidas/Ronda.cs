@@ -11,6 +11,8 @@ public sealed class Ronda
     public EstadoRonda Estado { get; set; } = EstadoRonda.PENDIENTE;
     public DateTimeOffset? FechaInicio { get; set; }
     public DateTimeOffset? FechaLimite { get; set; }
+    public DateTimeOffset? FechaCierre { get; set; }
+    public string? MotivoCierre { get; set; }
     public Partida Partida { get; set; } = null!;
     public Desafio Desafio { get; set; } = null!;
 }

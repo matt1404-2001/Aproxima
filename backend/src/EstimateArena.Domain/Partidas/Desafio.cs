@@ -5,6 +5,7 @@ public sealed class Desafio
     public long Id { get; set; }
     public string Pregunta { get; set; } = null!;
     public long RespuestaCorrecta { get; set; }
+    public long MargenPuntuacion { get; set; }
     public string Unidad { get; set; } = null!;
     public string? Explicacion { get; set; }
     public string? FuenteUrl { get; set; }

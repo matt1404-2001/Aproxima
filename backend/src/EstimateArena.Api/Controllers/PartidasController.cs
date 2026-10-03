@@ -41,6 +41,16 @@ public sealed class PartidasController(IPartidasServicio partidas) : ControllerB
     public Task<TransicionPartida> Iniciar(long partidaId, CancellationToken cancellationToken) =>
         partidas.IniciarAsync(partidaId, ObtenerSesion(), cancellationToken);
 
+    [HttpPost("{partidaId:long}/rondas/{rondaId:long}/estimaciones")]
+    [Authorize(Roles = "JUGADOR")]
+    public Task<EstimacionAceptada> EnviarEstimacion(long partidaId, long rondaId, [FromBody] EnviarEstimacionSolicitud solicitud, CancellationToken cancellationToken) =>
+        partidas.EnviarEstimacionAsync(partidaId, rondaId, solicitud.Valor, ObtenerSesion(), cancellationToken);
+
+    [HttpGet("{partidaId:long}/rondas/{rondaId:long}/resultados")]
+    [Authorize]
+    public Task<ResultadosRonda> ConsultarResultados(long partidaId, long rondaId, CancellationToken cancellationToken) =>
+        partidas.ConsultarResultadosAsync(partidaId, rondaId, ObtenerSesion(), cancellationToken);
+
     private SesionActual ObtenerSesion()
     {
         var partidaId = long.Parse(User.FindFirstValue("partidaId")!);
@@ -48,6 +58,8 @@ public sealed class PartidasController(IPartidasServicio partidas) : ControllerB
         return new SesionActual(partidaId, User.FindFirstValue(ClaimTypes.Role)!, jugador is null ? null : long.Parse(jugador));
     }
 }
+
+public sealed class EnviarEstimacionSolicitud { public long Valor { get; init; } }
 
 public sealed class IngresarJugadorSolicitud
 {
