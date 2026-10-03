@@ -1,0 +1,13 @@
+# .NET build artifacts
+**/bin/
+**/obj/
+
+# Local IDE settings
+.vs/
+.idea/
+*.user
+*.suo
+
+# Local secrets and deployment overrides
+appsettings.Local.json
+appsettings.Production.json
