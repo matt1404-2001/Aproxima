@@ -4,6 +4,7 @@ import { ErrorApi, solicitar } from './clienteHttp'
 import {
   consultarEstadoPartida,
   crearPartida,
+  enviarEstimacion,
   esErrorSesionDefinitivo,
   ingresarJugador,
   iniciarPartida,
@@ -60,6 +61,8 @@ describe('servicioPartidas', () => {
     await recuperarSesion(42, 'token_privado')
     await consultarEstadoPartida(42, 'token_privado', signal)
     await iniciarPartida(42, 'token_privado')
+    const signalEstimacion = new AbortController().signal
+    await enviarEstimacion(42, 17, 'token_privado', 35000, signalEstimacion)
 
     expect(solicitar).toHaveBeenNthCalledWith(1, '/partidas/42/sesion', {
       token: 'token_privado',
@@ -72,6 +75,26 @@ describe('servicioPartidas', () => {
       metodo: 'POST',
       token: 'token_privado',
     })
+    expect(solicitar).toHaveBeenNthCalledWith(4, '/partidas/42/rondas/17/estimaciones', {
+      metodo: 'POST',
+      token: 'token_privado',
+      cuerpo: { valor: 35000 },
+      signal: signalEstimacion,
+    })
+  })
+
+  it('traduce el rechazo de una estimación duplicada', async () => {
+    solicitar.mockRejectedValue(
+      new ErrorApi({
+        codigo: 'ESTIMACION_DUPLICADA',
+        mensaje: 'Mensaje remoto variable',
+        status: 409,
+      }),
+    )
+
+    await expect(enviarEstimacion(42, 17, 'token_privado', 35000)).rejects.toThrow(
+      'Ya enviaste una estimación para esta ronda.',
+    )
   })
 
   it('distingue los errores que invalidan definitivamente la sesión', () => {

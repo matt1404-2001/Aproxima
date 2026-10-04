@@ -12,6 +12,7 @@ export function useEstadoPartida(sesion, { alActualizar } = {}) {
   const cargando = ref(true)
   const desconectado = ref(false)
   const sesionInvalida = ref(false)
+  const latenciaEstimadaMs = ref(0)
 
   let versionEstado = 0
   let temporizador = null
@@ -24,6 +25,7 @@ export function useEstadoPartida(sesion, { alActualizar } = {}) {
 
     consultaEnCurso = true
     controlador = new AbortController()
+    const inicioConsulta = performance.now()
     let siguienteIntervalo = estadoPartida.value?.pollingSugeridoMs || intervaloPredeterminado
 
     try {
@@ -32,6 +34,7 @@ export function useEstadoPartida(sesion, { alActualizar } = {}) {
         sesion.token,
         controlador.signal,
       )
+      latenciaEstimadaMs.value = Math.max(0, (performance.now() - inicioConsulta) / 2)
 
       if (nuevoEstado.versionEstado >= versionEstado) {
         versionEstado = nuevoEstado.versionEstado
@@ -82,6 +85,7 @@ export function useEstadoPartida(sesion, { alActualizar } = {}) {
     cargando,
     desconectado,
     sesionInvalida,
+    latenciaEstimadaMs,
     reintentar,
     detener,
   }

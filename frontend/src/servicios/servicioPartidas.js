@@ -10,6 +10,10 @@ const mensajesPorCodigo = {
   ACCESO_DENEGADO: 'No tienes autorización para realizar esta acción.',
   JUGADORES_INSUFICIENTES: 'Se necesitan al menos 2 jugadores para iniciar.',
   ESTADO_PARTIDA_INCOMPATIBLE: 'La partida cambió de estado. Actualizando la pantalla.',
+  DATOS_INVALIDOS: 'Revisa la estimación e inténtalo nuevamente.',
+  RONDA_CERRADA: 'El tiempo terminó. Tu estimación no fue registrada.',
+  RONDA_NO_VIGENTE: 'La ronda cambió. Actualizando la información.',
+  ESTIMACION_DUPLICADA: 'Ya enviaste una estimación para esta ronda.',
   LIMITE_SOLICITUDES: 'Se realizaron demasiados intentos. Espera un momento y vuelve a probar.',
   SERVICIO_NO_DISPONIBLE: 'El servicio no está disponible en este momento. Inténtalo nuevamente.',
 }
@@ -38,6 +42,15 @@ export function iniciarPartida(partidaId, token) {
   return solicitarPartida(`/partidas/${partidaId}/iniciar`, {
     metodo: 'POST',
     token,
+  })
+}
+
+export function enviarEstimacion(partidaId, rondaId, token, valor, signal) {
+  return solicitarPartida(`/partidas/${partidaId}/rondas/${rondaId}/estimaciones`, {
+    metodo: 'POST',
+    token,
+    cuerpo: { valor },
+    signal,
   })
 }
 
