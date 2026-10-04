@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import InicioVista from '../vistas/InicioVista.vue'
 import EstadoPartidaVista from '../vistas/EstadoPartidaVista.vue'
 import LobbyVista from '../vistas/LobbyVista.vue'
+import RondaVista from '../vistas/RondaVista.vue'
 import { obtenerSesion } from '../servicios/servicioSesion'
 import { redireccionPorSesion } from '../utilidades/rutasPartida'
 
@@ -24,7 +25,7 @@ const router = createRouter({
     {
       path: '/partida/:partidaId/ronda/:rondaId',
       name: 'ronda',
-      component: EstadoPartidaVista,
+      component: RondaVista,
       meta: { requiereSesion: true },
     },
     {
