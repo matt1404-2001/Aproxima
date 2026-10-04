@@ -6,6 +6,10 @@ const mensajesPorCodigo = {
   PARTIDA_NO_DISPONIBLE: 'La partida ya comenzó o finalizó y no admite nuevos jugadores.',
   PARTIDA_LLENA: 'La partida alcanzó el máximo de jugadores.',
   NOMBRE_OCUPADO: 'Ese nombre ya está en uso. Elige otro.',
+  CREDENCIAL_INVALIDA: 'No fue posible recuperar la sesión.',
+  ACCESO_DENEGADO: 'No tienes autorización para realizar esta acción.',
+  JUGADORES_INSUFICIENTES: 'Se necesitan al menos 2 jugadores para iniciar.',
+  ESTADO_PARTIDA_INCOMPATIBLE: 'La partida cambió de estado. Actualizando la pantalla.',
   LIMITE_SOLICITUDES: 'Se realizaron demasiados intentos. Espera un momento y vuelve a probar.',
   SERVICIO_NO_DISPONIBLE: 'El servicio no está disponible en este momento. Inténtalo nuevamente.',
 }
@@ -20,6 +24,31 @@ export function ingresarJugador(codigo, nombre) {
     metodo: 'POST',
     cuerpo: { nombre: nombre.trim() },
   })
+}
+
+export function recuperarSesion(partidaId, token) {
+  return solicitarPartida(`/partidas/${partidaId}/sesion`, { token })
+}
+
+export function consultarEstadoPartida(partidaId, token, signal) {
+  return solicitarPartida(`/partidas/${partidaId}/estado`, { token, signal })
+}
+
+export function iniciarPartida(partidaId, token) {
+  return solicitarPartida(`/partidas/${partidaId}/iniciar`, {
+    metodo: 'POST',
+    token,
+  })
+}
+
+export function esErrorSesionDefinitivo(error, { accesoDenegadoEsDefinitivo = false } = {}) {
+  return (
+    error instanceof ErrorApi &&
+    (['CREDENCIAL_INVALIDA', 'PARTIDA_NO_ENCONTRADA'].includes(error.codigo) ||
+      [401, 404].includes(error.status) ||
+      (accesoDenegadoEsDefinitivo &&
+        (error.codigo === 'ACCESO_DENEGADO' || error.status === 403)))
+  )
 }
 
 async function solicitarPartida(ruta, opciones) {
