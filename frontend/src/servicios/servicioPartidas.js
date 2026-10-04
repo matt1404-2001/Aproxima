@@ -14,6 +14,10 @@ const mensajesPorCodigo = {
   RONDA_CERRADA: 'El tiempo terminó. Tu estimación no fue registrada.',
   RONDA_NO_VIGENTE: 'La ronda cambió. Actualizando la información.',
   ESTIMACION_DUPLICADA: 'Ya enviaste una estimación para esta ronda.',
+  RESULTADOS_NO_DISPONIBLES: 'Los resultados todavía están siendo preparados.',
+  RANKING_NO_DISPONIBLE: 'La clasificación todavía no está disponible.',
+  SIN_RONDAS_PENDIENTES: 'No quedan más rondas. Puedes finalizar la partida.',
+  RONDAS_PENDIENTES: 'Todavía quedan rondas por jugar.',
   LIMITE_SOLICITUDES: 'Se realizaron demasiados intentos. Espera un momento y vuelve a probar.',
   SERVICIO_NO_DISPONIBLE: 'El servicio no está disponible en este momento. Inténtalo nuevamente.',
 }
@@ -50,6 +54,34 @@ export function enviarEstimacion(partidaId, rondaId, token, valor, signal) {
     metodo: 'POST',
     token,
     cuerpo: { valor },
+    signal,
+  })
+}
+
+export function consultarResultadosRonda(partidaId, rondaId, token, signal) {
+  return solicitarPartida(`/partidas/${partidaId}/rondas/${rondaId}/resultados`, {
+    token,
+    signal,
+  })
+}
+
+export function consultarRanking(partidaId, token, signal) {
+  return solicitarPartida(`/partidas/${partidaId}/ranking`, { token, signal })
+}
+
+export function avanzarRonda(partidaId, rondaId, token, signal) {
+  return solicitarPartida(`/partidas/${partidaId}/rondas/${rondaId}/avanzar`, {
+    metodo: 'POST',
+    token,
+    signal,
+  })
+}
+
+export function finalizarPartida(partidaId, rondaId, token, signal) {
+  return solicitarPartida(`/partidas/${partidaId}/finalizar`, {
+    metodo: 'POST',
+    token,
+    cuerpo: { rondaId },
     signal,
   })
 }

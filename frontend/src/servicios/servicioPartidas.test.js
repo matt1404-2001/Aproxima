@@ -2,10 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ErrorApi, solicitar } from './clienteHttp'
 import {
+  avanzarRonda,
   consultarEstadoPartida,
+  consultarRanking,
+  consultarResultadosRonda,
   crearPartida,
   enviarEstimacion,
   esErrorSesionDefinitivo,
+  finalizarPartida,
   ingresarJugador,
   iniciarPartida,
   recuperarSesion,
@@ -63,6 +67,14 @@ describe('servicioPartidas', () => {
     await iniciarPartida(42, 'token_privado')
     const signalEstimacion = new AbortController().signal
     await enviarEstimacion(42, 17, 'token_privado', 35000, signalEstimacion)
+    const signalResultados = new AbortController().signal
+    await consultarResultadosRonda(42, 17, 'token_privado', signalResultados)
+    const signalRanking = new AbortController().signal
+    await consultarRanking(42, 'token_privado', signalRanking)
+    const signalAvance = new AbortController().signal
+    await avanzarRonda(42, 17, 'token_privado', signalAvance)
+    const signalFinalizacion = new AbortController().signal
+    await finalizarPartida(42, 17, 'token_privado', signalFinalizacion)
 
     expect(solicitar).toHaveBeenNthCalledWith(1, '/partidas/42/sesion', {
       token: 'token_privado',
@@ -80,6 +92,25 @@ describe('servicioPartidas', () => {
       token: 'token_privado',
       cuerpo: { valor: 35000 },
       signal: signalEstimacion,
+    })
+    expect(solicitar).toHaveBeenNthCalledWith(5, '/partidas/42/rondas/17/resultados', {
+      token: 'token_privado',
+      signal: signalResultados,
+    })
+    expect(solicitar).toHaveBeenNthCalledWith(6, '/partidas/42/ranking', {
+      token: 'token_privado',
+      signal: signalRanking,
+    })
+    expect(solicitar).toHaveBeenNthCalledWith(7, '/partidas/42/rondas/17/avanzar', {
+      metodo: 'POST',
+      token: 'token_privado',
+      signal: signalAvance,
+    })
+    expect(solicitar).toHaveBeenNthCalledWith(8, '/partidas/42/finalizar', {
+      metodo: 'POST',
+      token: 'token_privado',
+      cuerpo: { rondaId: 17 },
+      signal: signalFinalizacion,
     })
   })
 
