@@ -1,35 +1,48 @@
 const claveSesion = 'estimate-arena:sesion'
+let sesionTemporal = null
 
 export function guardarSesion(sesion) {
   const datos = {
     partidaId: sesion.partidaId,
+    codigo: sesion.codigo,
     rol: sesion.rol,
     token: sesion.token,
+    jugador: sesion.jugador,
   }
+  sesionTemporal = { ...datos, persistente: false }
 
-  localStorage.setItem(claveSesion, JSON.stringify(datos))
+  try {
+    localStorage.setItem(claveSesion, JSON.stringify(datos))
+    sesionTemporal = { ...datos, persistente: true }
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function obtenerSesion() {
-  const valor = localStorage.getItem(claveSesion)
-  if (!valor) return null
-
   try {
+    const valor = localStorage.getItem(claveSesion)
+    if (!valor) return sesionTemporal
     const sesion = JSON.parse(valor)
     if (!sesion.partidaId || !sesion.rol || !sesion.token) {
       eliminarSesion()
-      return null
+      return sesionTemporal
     }
 
-    return sesion
+    return { ...sesion, persistente: true }
   } catch {
-    eliminarSesion()
-    return null
+    return sesionTemporal
   }
 }
 
 export function eliminarSesion() {
-  localStorage.removeItem(claveSesion)
+  sesionTemporal = null
+  try {
+    localStorage.removeItem(claveSesion)
+  } catch {
+    // La sesión ya no puede utilizarse si el almacenamiento dejó de estar disponible.
+  }
 }
 
 export function almacenamientoDisponible() {

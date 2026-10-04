@@ -1,4 +1,7 @@
-const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '')
+const apiBaseUrl = (
+  import.meta.env.VITE_API_BASE_URL ||
+  'https://tiusr30pl.cuc-carrera-ti.ac.cr/juego/api/v1'
+).replace(/\/$/, '')
 
 export class ErrorApi extends Error {
   constructor({ codigo, mensaje, detalles = [], estadoActual, rondaActualId, status }) {

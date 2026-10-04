@@ -1,3 +1,84 @@
+<script setup>
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+
+import FormularioIngreso from '../componentes/FormularioIngreso.vue'
+import { crearPartida, ingresarJugador } from '../servicios/servicioPartidas'
+import {
+  almacenamientoDisponible,
+  guardarSesion,
+} from '../servicios/servicioSesion'
+
+const router = useRouter()
+const modo = ref('elegir')
+const pendiente = ref(false)
+const errorAcceso = ref('')
+
+function mostrarIngreso() {
+  errorAcceso.value = ''
+  modo.value = 'ingresar'
+}
+
+function mostrarOpciones() {
+  errorAcceso.value = ''
+  modo.value = 'elegir'
+}
+
+async function crear() {
+  if (!comprobarAlmacenamiento()) return
+
+  pendiente.value = true
+  errorAcceso.value = ''
+  try {
+    const partida = await crearPartida()
+    guardarSesion({
+      partidaId: partida.partidaId,
+      codigo: partida.codigo,
+      rol: 'ANFITRION',
+      token: partida.tokenAnfitrion,
+    })
+    await router.push({ name: 'lobby', params: { partidaId: partida.partidaId } })
+  } catch (error) {
+    errorAcceso.value = mensajeAcceso(error, 'No fue posible crear la partida.')
+  } finally {
+    pendiente.value = false
+  }
+}
+
+async function ingresar({ codigo, nombre }) {
+  if (!comprobarAlmacenamiento()) return
+
+  pendiente.value = true
+  errorAcceso.value = ''
+  try {
+    const ingreso = await ingresarJugador(codigo, nombre)
+    guardarSesion({
+      partidaId: ingreso.partidaId,
+      codigo: ingreso.codigo,
+      rol: 'JUGADOR',
+      token: ingreso.tokenJugador,
+      jugador: ingreso.jugador,
+    })
+    await router.push({ name: 'lobby', params: { partidaId: ingreso.partidaId } })
+  } catch (error) {
+    errorAcceso.value = mensajeAcceso(error, 'No fue posible ingresar a la partida.')
+  } finally {
+    pendiente.value = false
+  }
+}
+
+function comprobarAlmacenamiento() {
+  if (almacenamientoDisponible()) return true
+  errorAcceso.value =
+    'Este navegador debe permitir el almacenamiento local para conservar tu sesión.'
+  return false
+}
+
+function mensajeAcceso(error, mensajePredeterminado) {
+  return error?.message || mensajePredeterminado
+}
+</script>
+
 <template>
   <main class="inicio">
     <section
@@ -52,40 +133,70 @@
       class="acceso"
       aria-labelledby="titulo-acceso"
     >
-      <div class="acceso__cabecera">
-        <p class="acceso__estado">
-          <span aria-hidden="true" /> Arena disponible
-        </p>
-        <h2 id="titulo-acceso">
-          Elige tu entrada
-        </h2>
-        <p>Crea una sala para dirigir el juego o usa el código que ves en pantalla.</p>
-      </div>
+      <div class="acceso__interior">
+        <div class="acceso__cabecera">
+          <p class="acceso__estado">
+            <span aria-hidden="true" /> Arena disponible
+          </p>
+          <h2 id="titulo-acceso">
+            {{ modo === 'ingresar' ? 'Entra a la partida' : 'Elige tu entrada' }}
+          </h2>
+          <p v-if="modo === 'ingresar'">
+            Escribe el código de la pantalla y el nombre que verán los demás.
+          </p>
+          <p v-else>
+            Crea una sala para dirigir el juego o usa el código que comparte el anfitrión.
+          </p>
+        </div>
 
-      <div
-        class="acciones"
-        role="group"
-        aria-label="Opciones de acceso"
-      >
-        <button
-          class="boton boton--principal"
-          type="button"
-          disabled
-        >
-          Crear una partida
-        </button>
-        <button
-          class="boton boton--secundario"
-          type="button"
-          disabled
-        >
-          Ingresar con código
-        </button>
-      </div>
+        <FormularioIngreso
+          v-if="modo === 'ingresar'"
+          :pendiente="pendiente"
+          :error-externo="errorAcceso"
+          @enviar="ingresar"
+          @cancelar="mostrarOpciones"
+        />
 
-      <p class="acceso__nota">
-        La conexión de estas acciones se incorpora en el siguiente módulo.
-      </p>
+        <template v-else>
+          <div
+            class="acciones"
+            role="group"
+            aria-label="Opciones de acceso"
+          >
+            <button
+              class="boton boton--principal"
+              type="button"
+              :disabled="pendiente"
+              :aria-busy="pendiente"
+              @click="crear"
+            >
+              {{ pendiente ? 'Creando arena…' : 'Crear una partida' }}
+            </button>
+            <button
+              class="boton boton--secundario"
+              type="button"
+              :disabled="pendiente"
+              @click="mostrarIngreso"
+            >
+              Ingresar con código
+            </button>
+          </div>
+
+          <p
+            v-if="errorAcceso"
+            class="mensaje-error"
+            role="alert"
+          >
+            {{ errorAcceso }}
+          </p>
+          <p
+            v-else
+            class="acceso__nota"
+          >
+            No necesitas cuenta. Tu sesión queda guardada únicamente en este navegador.
+          </p>
+        </template>
+      </div>
     </section>
   </main>
 </template>
@@ -115,7 +226,7 @@
   display: flex;
   align-items: center;
   gap: 0.7rem;
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   font-weight: 760;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -152,7 +263,7 @@
 }
 
 .presentacion__numero span {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 720;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -196,7 +307,7 @@ h1 {
 
 .reglas-rapidas dt {
   color: var(--color-papel-secundario);
-  font-size: 0.76rem;
+  font-size: 0.82rem;
   font-weight: 680;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -212,15 +323,12 @@ h1 {
 .acceso {
   display: flex;
   min-height: 100dvh;
-  flex-direction: column;
-  justify-content: center;
+  align-items: center;
   background: var(--color-papel);
   color: var(--color-tinta);
 }
 
-.acceso__cabecera,
-.acciones,
-.acceso__nota {
+.acceso__interior {
   width: min(100%, 29rem);
   margin-inline: auto;
 }
@@ -231,7 +339,7 @@ h1 {
   gap: 0.55rem;
   margin: 0 0 3rem;
   color: var(--color-texto-suave);
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   font-weight: 680;
 }
 
@@ -251,7 +359,7 @@ h2 {
 }
 
 .acceso__cabecera > p:last-child {
-  max-width: 37ch;
+  max-width: 39ch;
   margin: 1.25rem 0 0;
   color: var(--color-texto-suave);
   line-height: 1.55;
@@ -263,11 +371,22 @@ h2 {
   margin-top: 2.5rem;
 }
 
-.acceso__nota {
-  margin-top: 1.5rem;
-  color: var(--color-texto-suave);
-  font-size: 0.78rem;
+.acceso__nota,
+.mensaje-error {
+  margin: 1.5rem 0 0;
+  font-size: 0.82rem;
   line-height: 1.5;
+}
+
+.acceso__nota {
+  color: var(--color-texto-suave);
+}
+
+.mensaje-error {
+  border-top: 1px solid var(--color-error);
+  padding-top: 0.9rem;
+  color: var(--color-error);
+  font-weight: 620;
 }
 
 @media (max-width: 800px) {
@@ -305,7 +424,14 @@ h2 {
 
   .acceso {
     order: -1;
-    padding-block: 4rem;
+    width: 100%;
+    min-width: 0;
+    min-height: 88dvh;
+    padding-block: 3rem;
+  }
+
+  .acceso__interior {
+    width: min(calc(100vw - 3rem), 29rem);
   }
 }
 
@@ -313,6 +439,10 @@ h2 {
   .presentacion,
   .acceso {
     padding-inline: 1.25rem;
+  }
+
+  .acceso__interior {
+    width: calc(100vw - 2.5rem);
   }
 
   .reglas-rapidas div {
@@ -324,7 +454,7 @@ h2 {
   }
 
   .reglas-rapidas dt {
-    font-size: 0.64rem;
+    font-size: 0.68rem;
   }
 }
 </style>
