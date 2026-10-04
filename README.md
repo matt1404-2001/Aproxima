@@ -132,4 +132,4 @@ npm run build
 
 ## Alcance académico
 
-El proyecto prioriza una arquitectura clara y un alcance apropiado para una exposición universitaria. No incluye cuentas de usuario, OAuth, chat, torneos, pagos, microservicios ni un panel administrativo de desafíos.
+
