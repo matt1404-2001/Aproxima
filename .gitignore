@@ -16,19 +16,4 @@ appsettings.Production.json
 /publicacion-plesk*/
 /publicacion-plesk*.zip
 
-# Local AI agent instructions
-**/[Aa][Gg][Ee][Nn][Tt][Ss].[Mm][Dd]
-**/[Aa][Gg][Ee][Nn][Tt][Ss].override.[Mm][Dd]
-**/CLAUDE.md
-**/claude.md
-**/GEMINI.md
-**/gemini.md
-**/.cursorrules
-**/.cursor/
-**/.claude/
-**/.codex/
-**/.agents/
-**/.github/copilot-instructions.md
-**/.github/instructions/*.instructions.md
-**/AI_INSTRUCTIONS.md
-**/INSTRUCTIONS_AI.md
+
