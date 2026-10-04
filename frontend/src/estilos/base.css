@@ -1,0 +1,93 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--color-tinta);
+}
+
+body {
+  min-height: 100dvh;
+  margin: 0;
+  background: var(--color-papel);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  touch-action: manipulation;
+}
+
+::selection {
+  background: var(--color-acento);
+  color: var(--color-tinta);
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-acento-activo);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px var(--color-tinta);
+}
+
+.boton {
+  min-height: 3.5rem;
+  border: 1px solid transparent;
+  border-radius: var(--radio-control);
+  padding: 0.9rem 1.2rem;
+  font-weight: 720;
+  cursor: pointer;
+  transition:
+    transform var(--duracion-rapida) var(--ease-salida),
+    background-color var(--duracion-rapida) ease,
+    border-color var(--duracion-rapida) ease,
+    color var(--duracion-rapida) ease;
+}
+
+.boton--principal {
+  background: var(--color-tinta);
+  color: var(--color-papel);
+}
+
+.boton--secundario {
+  border-color: var(--color-linea);
+  background: transparent;
+  color: var(--color-tinta);
+}
+
+.boton:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.boton:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .boton--principal:hover:not(:disabled) {
+    background: var(--color-tinta-elevada);
+  }
+
+  .boton--secundario:hover:not(:disabled) {
+    border-color: var(--color-tinta);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .boton {
+    transition-property: background-color, border-color, color;
+  }
+
+  .boton:active:not(:disabled) {
+    transform: none;
+  }
+}
