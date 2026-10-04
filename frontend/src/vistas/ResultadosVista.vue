@@ -30,6 +30,7 @@ const botonControl = ref(null)
 let controladorDatos = null
 let controladorAccion = null
 
+// El composable continúa el polling mientras los resultados permanecen visibles.
 const {
   estadoPartida: estadoConsultado,
   desconectado,
@@ -75,6 +76,7 @@ onMounted(cargarDatos)
 onUnmounted(cancelarSolicitudes)
 
 async function procesarEstado(nuevoEstado) {
+  // La respuesta del polling decide si se recargan datos o se cambia de vista.
   const destino = rutaParaEstado(nuevoEstado)
   if (router.resolve(destino).fullPath === route.fullPath) {
     if ((!resultados.value || !ranking.value || errorDatos.value) && !cargandoDatos.value) {
@@ -105,6 +107,7 @@ async function procesarEstado(nuevoEstado) {
 }
 
 async function cargarDatos() {
+  // Esta función obtiene resultados y ranking mediante los servicios de la API.
   const rondaId = resumen.value?.rondaId
   if (!rondaId || cargandoDatos.value) return
 
@@ -114,6 +117,7 @@ async function cargarDatos() {
   cargandoDatos.value = true
   errorDatos.value = ''
 
+  // Las consultas son independientes: una puede mostrarse aunque la otra falle.
   const consultas = await Promise.allSettled([
     consultarResultadosRonda(sesion.partidaId, rondaId, sesion.token, controlador.signal),
     consultarRanking(sesion.partidaId, sesion.token, controlador.signal),
@@ -145,6 +149,7 @@ async function cargarDatos() {
 }
 
 async function ejecutarControl() {
+  // Según el estado oficial, el anfitrión avanza de ronda o finaliza la partida.
   if (accionEnCurso.value || (!puedeAvanzar.value && !puedeFinalizar.value)) return
   if (puedeFinalizar.value && !confirmandoFinal.value) {
     confirmandoFinal.value = true
@@ -442,6 +447,7 @@ async function salir() {
           </button>
         </div>
 
+        <!-- TablaRanking recibe la respuesta oficial y se ocupa únicamente de presentarla. -->
         <TablaRanking
           v-if="ranking"
           :ranking="ranking"

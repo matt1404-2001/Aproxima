@@ -15,6 +15,7 @@ const cargando = ref(!ranking.value)
 const errorRanking = ref('')
 let controladorRanking = null
 
+// El composable comprueba que la partida continúe finalizada y conserva la sesión sincronizada.
 const {
   estadoPartida,
   desconectado,
@@ -35,6 +36,7 @@ onMounted(cargarRanking)
 onUnmounted(() => controladorRanking?.abort())
 
 async function confirmarFinalizacion(nuevoEstado) {
+  // Si el estado cambia, Vue Router corrige la pantalla mostrada.
   if (nuevoEstado.estado === 'FINALIZADA') {
     detener()
     controladorRanking?.abort()
@@ -51,6 +53,7 @@ async function confirmarFinalizacion(nuevoEstado) {
 }
 
 async function cargarRanking() {
+  // servicioPartidas solicita a la API la clasificación definitiva.
   if (controladorRanking) return
   const controlador = new AbortController()
   controladorRanking = controlador
@@ -128,6 +131,7 @@ async function volverAlInicio() {
         class="tabla-final"
         aria-live="polite"
       >
+        <!-- Este componente reutilizable muestra las posiciones recibidas de la API. -->
         <TablaRanking
           v-if="ranking"
           :ranking="ranking"

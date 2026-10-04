@@ -1,4 +1,5 @@
 <script setup>
+// La vista entrega el ranking oficial mediante una prop; este componente solo lo presenta.
 defineProps({
   ranking: { type: Object, required: true },
 })
@@ -21,6 +22,7 @@ const formatearPuntos = (puntos) => puntos.toLocaleString('es-CR')
       <span>{{ ranking.posiciones.length }} jugadores</span>
     </header>
 
+    <!-- v-for genera una fila por cada posición calculada por el servidor. -->
     <ol class="posiciones">
       <li
         v-for="entrada in ranking.posiciones"
