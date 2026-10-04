@@ -1,6 +1,6 @@
 <script setup>
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import FormularioIngreso from '../componentes/FormularioIngreso.vue'
 import { crearPartida, ingresarJugador } from '../servicios/servicioPartidas'
@@ -10,9 +10,19 @@ import {
 } from '../servicios/servicioSesion'
 
 const router = useRouter()
+const route = useRoute()
 const modo = ref('elegir')
 const pendiente = ref(false)
 const errorAcceso = ref('')
+const avisoSesion = computed(() => {
+  if (route.query.sesion === 'partida-no-disponible') {
+    return 'La partida guardada ya no está disponible. Puedes crear o ingresar a otra.'
+  }
+  if (route.query.sesion === 'invalida') {
+    return 'No fue posible recuperar la sesión anterior. Ingresa nuevamente a una partida.'
+  }
+  return ''
+})
 
 function mostrarIngreso() {
   errorAcceso.value = ''
@@ -158,6 +168,13 @@ function mensajeAcceso(error, mensajePredeterminado) {
         />
 
         <template v-else>
+          <p
+            v-if="avisoSesion"
+            class="aviso-sesion"
+            role="status"
+          >
+            {{ avisoSesion }}
+          </p>
           <div
             class="acciones"
             role="group"
@@ -369,6 +386,15 @@ h2 {
   display: grid;
   gap: 0.75rem;
   margin-top: 2.5rem;
+}
+
+.aviso-sesion {
+  margin: 2rem 0 -1rem;
+  border-top: 1px solid var(--color-linea);
+  padding-top: 0.9rem;
+  color: var(--color-texto-suave);
+  font-size: 0.88rem;
+  line-height: 1.5;
 }
 
 .acceso__nota,

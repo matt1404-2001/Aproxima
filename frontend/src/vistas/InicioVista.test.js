@@ -13,6 +13,7 @@ const dobles = vi.hoisted(() => ({
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: dobles.push }),
+  useRoute: () => ({ query: {} }),
 }))
 
 vi.mock('../servicios/servicioPartidas', () => ({
