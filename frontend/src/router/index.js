@@ -1,9 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import InicioVista from '../vistas/InicioVista.vue'
-import EstadoPartidaVista from '../vistas/EstadoPartidaVista.vue'
 import LobbyVista from '../vistas/LobbyVista.vue'
+import RankingVista from '../vistas/RankingVista.vue'
 import RondaVista from '../vistas/RondaVista.vue'
+import ResultadosVista from '../vistas/ResultadosVista.vue'
 import { obtenerSesion } from '../servicios/servicioSesion'
 import { redireccionPorSesion } from '../utilidades/rutasPartida'
 
@@ -31,13 +32,13 @@ const router = createRouter({
     {
       path: '/partida/:partidaId/ronda/:rondaId/resultados',
       name: 'resultados',
-      component: EstadoPartidaVista,
+      component: ResultadosVista,
       meta: { requiereSesion: true },
     },
     {
       path: '/partida/:partidaId/ranking',
       name: 'ranking',
-      component: EstadoPartidaVista,
+      component: RankingVista,
       meta: { requiereSesion: true },
     },
   ],
