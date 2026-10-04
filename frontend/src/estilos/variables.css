@@ -1,0 +1,22 @@
+:root {
+  --color-tinta: #151711;
+  --color-tinta-elevada: #20231a;
+  --color-papel: #f3f2e9;
+  --color-papel-secundario: #c9cabc;
+  --color-texto-suave: #5b5e54;
+  --color-linea: #c9cabf;
+  --color-linea-oscura: #3b3e33;
+  --color-acento: #d5ed68;
+  --color-acento-activo: #c4de4e;
+  --color-error: #b6382f;
+  --color-exito: #38784a;
+  --radio-control: 0.75rem;
+  --sombra-flotante: 0 1rem 2.5rem rgb(20 23 17 / 12%);
+  --duracion-rapida: 150ms;
+  --duracion-media: 220ms;
+  --ease-salida: cubic-bezier(0.23, 1, 0.32, 1);
+  color-scheme: light;
+  font-family: 'Archivo Variable', sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
