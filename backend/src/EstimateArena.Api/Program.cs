@@ -26,7 +26,11 @@ builder.Services.AddAuthorization();
 builder.Services.AddExceptionHandler<ManejadorExcepcionesApi>();
 builder.Services.AddProblemDetails();
 builder.Services.AddControllers()
-    .AddJsonOptions(options => options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
+        options.JsonSerializerOptions.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
+    })
     .ConfigureApiBehaviorOptions(options =>
 {
     options.InvalidModelStateResponseFactory = context =>
@@ -48,6 +52,8 @@ builder.Services.AddControllers()
             TimeProvider.System.GetUtcNow()));
     };
 });
+builder.Services.ConfigureHttpJsonOptions(options =>
+    options.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull);
 
 builder.Services.AddOptions<OpcionesPartida>()
     .BindConfiguration(OpcionesPartida.Seccion)
@@ -80,9 +86,24 @@ var limites = builder.Configuration.GetSection(OpcionesLimiteSolicitudes.Seccion
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    AgregarLimite(options, "crear", limites);
-    AgregarLimite(options, "ingresar", limites);
-    AgregarLimite(options, "control", limites);
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        var respuesta = context.HttpContext.Response;
+        respuesta.StatusCode = StatusCodes.Status429TooManyRequests;
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var espera))
+        {
+            respuesta.Headers.RetryAfter = Math.Max(1, (int)Math.Ceiling(espera.TotalSeconds)).ToString();
+        }
+
+        var reloj = context.HttpContext.RequestServices.GetRequiredService<TimeProvider>();
+        await respuesta.WriteAsJsonAsync(
+            new ErrorApi("LIMITE_SOLICITUDES", "Espera unos segundos antes de intentarlo nuevamente.", null, null, null, reloj.GetUtcNow()),
+            cancellationToken);
+    };
+    AgregarLimite(options, "crear", limites.SolicitudesPorVentana, limites.VentanaSegundos);
+    AgregarLimite(options, "ingresar", limites.SolicitudesIngresoPorVentana, limites.VentanaSegundos);
+    AgregarLimite(options, "control", limites.SolicitudesPorVentana, limites.VentanaSegundos);
+    AgregarLimite(options, "estimacion", limites.SolicitudesPorVentana, limites.VentanaSegundos);
 });
 
 var app = builder.Build();
@@ -92,22 +113,37 @@ app.UseForwardedHeaders(new ForwardedHeadersOptions
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
 });
 app.UseExceptionHandler();
-app.UseRateLimiter();
+app.UseRouting();
 app.UseCors("Frontend");
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
 
-static void AgregarLimite(RateLimiterOptions options, string nombre, OpcionesLimiteSolicitudes limites)
+static void AgregarLimite(RateLimiterOptions options, string nombre, int solicitudesPorVentana, int ventanaSegundos)
 {
-    options.AddFixedWindowLimiter(nombre, limiter => new FixedWindowRateLimiterOptions
+    options.AddPolicy(nombre, contexto => RateLimitPartition.GetFixedWindowLimiter(
+        partitionKey: ObtenerClaveParticion(contexto),
+        factory: _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = solicitudesPorVentana,
+            Window = TimeSpan.FromSeconds(ventanaSegundos),
+            QueueLimit = 0
+        }));
+}
+
+static string ObtenerClaveParticion(HttpContext contexto)
+{
+    var partidaId = contexto.User.FindFirst("partidaId")?.Value;
+    if (partidaId is not null)
     {
-        PermitLimit = limites.SolicitudesPorVentana,
-        Window = TimeSpan.FromSeconds(limites.VentanaSegundos),
-        QueueLimit = 0
-    });
+        var jugadorId = contexto.User.FindFirst("jugadorId")?.Value;
+        return jugadorId is null ? $"anfitrion:{partidaId}" : $"jugador:{partidaId}:{jugadorId}";
+    }
+
+    return contexto.Connection.RemoteIpAddress?.ToString() ?? "sin-ip";
 }
 
 public partial class Program;

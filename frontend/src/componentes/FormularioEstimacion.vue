@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 
+// Las props reciben el estado de la ronda y emit comunica el envío a la vista.
 const props = defineProps({
   unidad: { type: String, required: true },
   respondio: { type: Boolean, default: false },
@@ -34,12 +35,14 @@ watch(
   () => props.respondio,
   async (respondio, respondioAntes) => {
     if (!respondio || respondioAntes) return
+    // nextTick espera a que Vue muestre la confirmación antes de mover el foco.
     await nextTick()
     confirmacion.value?.focus()
   },
 )
 
 function enviar() {
+  // La validación ocurre aquí; la vista padre se encarga de llamar a la API.
   const normalizado = valor.value.trim()
 
   if (!normalizado) {
@@ -78,7 +81,7 @@ function enviar() {
         class="confirmacion__marca"
         aria-hidden="true"
       >
-        ✓
+        OK
       </p>
       <h2 id="titulo-respuesta">
         Estimación registrada
@@ -94,6 +97,7 @@ function enviar() {
       </p>
     </div>
 
+    <!-- @submit.prevent evita la recarga y ejecuta la función enviar del componente. -->
     <form
       v-else
       novalidate

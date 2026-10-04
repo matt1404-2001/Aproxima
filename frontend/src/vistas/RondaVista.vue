@@ -25,6 +25,7 @@ const rondaCerrada = ref(false)
 const rondaDesactualizada = ref(false)
 let controladorEnvio = null
 
+// Este composable mantiene la vista sincronizada con el estado oficial de la partida.
 const {
   estadoPartida: estadoConsultado,
   cargando,
@@ -35,6 +36,7 @@ const {
   detener,
 } = useEstadoPartida(sesion, { alActualizar: redirigirSiCambio })
 
+// Los computed adaptan la respuesta de la API a valores simples para la plantilla.
 const estadoPartida = computed(() => estadoConsultado.value || estadoInicial)
 const ronda = computed(() => estadoPartida.value?.ronda || null)
 const servidorAhora = computed(() => estadoPartida.value?.servidorAhora || null)
@@ -51,6 +53,7 @@ const progreso = computed(() => {
   return Math.min(100, (ronda.value.numero / ronda.value.totalRondas) * 100)
 })
 const { segundosRestantes } = useContadorRonda(ronda, servidorAhora, latenciaEstimadaMs)
+// El tiempo visible es reactivo, pero la API conserva la decisión final sobre el cierre.
 const tiempoAgotado = computed(() => Boolean(ronda.value) && segundosRestantes.value === 0)
 const textoTiempo = computed(() => String(segundosRestantes.value).padStart(2, '0'))
 const textoBloqueo = computed(() => {
@@ -88,12 +91,14 @@ watch(
 onUnmounted(() => controladorEnvio?.abort())
 
 async function redirigirSiCambio(nuevoEstado) {
+  // Cuando el polling detecta otro estado, Vue Router abre la vista correspondiente.
   const destino = rutaParaEstado(nuevoEstado)
   if (router.resolve(destino).fullPath === route.fullPath) return
   await router.replace(rutaConEstado(nuevoEstado))
 }
 
 async function registrarEstimacion(valor) {
+  // El evento del formulario llega aquí y servicioPartidas envía la estimación a la API.
   if (!esJugador.value || enviando.value || respondio.value || tiempoAgotado.value) return
 
   enviando.value = true
@@ -209,6 +214,7 @@ async function salir() {
           <small>segundos</small>
         </div>
 
+        <!-- Las props bajan al formulario y el evento enviar regresa a esta vista. -->
         <FormularioEstimacion
           v-if="esJugador"
           :unidad="ronda.unidad"

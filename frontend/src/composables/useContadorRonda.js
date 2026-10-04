@@ -32,6 +32,7 @@ export function useContadorRonda(ronda, servidorAhora, latenciaEstimadaMs) {
     }
   }
 
+  // watch resincroniza el contador cuando llega una nueva hora oficial del servidor.
   watch([ronda, servidorAhora, ...(latenciaEstimadaMs ? [latenciaEstimadaMs] : [])], sincronizar, {
     immediate: true,
   })

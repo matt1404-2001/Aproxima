@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 
+// Las props permiten que la vista padre controle el estado de carga y los errores de la API.
 defineProps({
   pendiente: {
     type: Boolean,
@@ -12,6 +13,7 @@ defineProps({
   },
 })
 
+// Los eventos comunican las acciones del formulario sin acoplarlo a la API ni al router.
 const emit = defineEmits(['enviar', 'cancelar'])
 
 const codigo = ref('')
@@ -19,6 +21,7 @@ const nombre = ref('')
 const enviado = ref(false)
 const campoCodigo = ref(null)
 
+// computed normaliza los campos sin guardar una segunda copia de su estado.
 const codigoNormalizado = computed(() => codigo.value.trim().toUpperCase())
 const nombreNormalizado = computed(() => nombre.value.trim())
 
@@ -43,11 +46,13 @@ const errorNombre = computed(() => {
 
 onMounted(() => campoCodigo.value?.focus())
 
+// Este evento normaliza el código mientras el usuario escribe.
 function actualizarCodigo(evento) {
   codigo.value = evento.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 5)
 }
 
 function enviar() {
+  // El componente valida y luego entrega los datos limpios a InicioVista.
   enviado.value = true
   if (errorCodigo.value || errorNombre.value) return
 
@@ -102,6 +107,7 @@ function enviar() {
 
     <div class="campo">
       <label for="nombre-jugador">Tu nombre</label>
+      <!-- v-model mantiene el campo sincronizado con la ref nombre. -->
       <input
         id="nombre-jugador"
         v-model="nombre"

@@ -20,6 +20,7 @@ export function useEstadoPartida(sesion, { alActualizar } = {}) {
   let consultaEnCurso = false
   let detenido = false
 
+  // La siguiente consulta se agenda al terminar para evitar solicitudes superpuestas.
   async function consultar() {
     if (detenido || consultaEnCurso) return
 
@@ -36,6 +37,7 @@ export function useEstadoPartida(sesion, { alActualizar } = {}) {
       )
       latenciaEstimadaMs.value = Math.max(0, (performance.now() - inicioConsulta) / 2)
 
+      // La versión impide que una respuesta antigua reemplace el estado más reciente.
       if (nuevoEstado.versionEstado >= versionEstado) {
         versionEstado = nuevoEstado.versionEstado
         estadoPartida.value = nuevoEstado

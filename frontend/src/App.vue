@@ -10,6 +10,7 @@ import { eliminarSesion, guardarSesion, obtenerSesion } from './servicios/servic
 import { rutaConEstado } from './utilidades/rutasPartida'
 
 const router = useRouter()
+// El servicio de sesión obtiene la identidad guardada en localStorage.
 const sesionInicial = obtenerSesion()
 const recuperando = ref(Boolean(sesionInicial))
 const errorRecuperacion = ref('')
@@ -19,11 +20,13 @@ const mensajeRecuperacion = computed(
     'Estamos consultando el estado oficial de la partida antes de devolverte a la arena.',
 )
 
+// onMounted recupera la sesión cuando la aplicación ya está lista en el navegador.
 onMounted(() => {
   if (sesionInicial) recuperar()
 })
 
 async function recuperar() {
+  // El servicio consulta la API y Vue Router abre la vista del estado recuperado.
   const sesion = obtenerSesion()
   if (!sesion) {
     recuperando.value = false
@@ -65,6 +68,7 @@ async function recuperar() {
 }
 
 async function descartarSesion() {
+  // Al eliminar la sesión, la navegación vuelve a la pantalla pública de inicio.
   eliminarSesion()
   recuperando.value = false
   await router.replace({ name: 'inicio' })
@@ -113,6 +117,7 @@ async function descartarSesion() {
       </div>
     </section>
   </main>
+  <!-- RouterView renderiza la vista que corresponde a la ruta actual. -->
   <RouterView v-else />
 </template>
 

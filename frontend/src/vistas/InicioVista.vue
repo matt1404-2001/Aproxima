@@ -11,6 +11,7 @@ import {
 
 const router = useRouter()
 const route = useRoute()
+// Estas refs controlan qué formulario se muestra y el estado de las solicitudes.
 const modo = ref('elegir')
 const pendiente = ref(false)
 const errorAcceso = ref('')
@@ -35,6 +36,7 @@ function mostrarOpciones() {
 }
 
 async function crear() {
+  // servicioPartidas crea la sala; servicioSesion conserva la credencial recibida.
   if (!comprobarAlmacenamiento()) return
 
   pendiente.value = true
@@ -56,6 +58,7 @@ async function crear() {
 }
 
 async function ingresar({ codigo, nombre }) {
+  // El evento del FormularioIngreso llega aquí y se envía a la API.
   if (!comprobarAlmacenamiento()) return
 
   pendiente.value = true
@@ -159,6 +162,7 @@ function mensajeAcceso(error, mensajePredeterminado) {
           </p>
         </div>
 
+        <!-- El componente hijo emite enviar o cancelar y la vista coordina esas acciones. -->
         <FormularioIngreso
           v-if="modo === 'ingresar'"
           :pendiente="pendiente"

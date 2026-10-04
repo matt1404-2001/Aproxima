@@ -18,6 +18,7 @@ const errorInicio = ref('')
 const sesionRecuperada = Boolean(window.history.state?.sesionRecuperada)
 let temporizadorCopiado = null
 
+// useEstadoPartida inicia el polling y entrega refs reactivas con el estado oficial.
 const {
   estadoPartida,
   cargando,
@@ -51,6 +52,7 @@ const textoEstado = computed(() => {
 })
 
 watch(sesionInvalida, async (esInvalida) => {
+  // watch reacciona cuando el composable detecta que la credencial dejó de ser válida.
   if (!esInvalida) return
   eliminarSesion()
   await router.replace({ name: 'inicio', query: { sesion: 'invalida' } })
@@ -59,6 +61,7 @@ watch(sesionInvalida, async (esInvalida) => {
 onUnmounted(() => window.clearTimeout(temporizadorCopiado))
 
 async function cambiarVistaSiCorresponde(nuevoEstado) {
+  // El polling cambia de vista cuando el servidor abandona el estado LOBBY.
   if (nuevoEstado.estado === 'LOBBY') return
   detener()
   await router.replace(rutaConEstado(nuevoEstado))
@@ -78,6 +81,7 @@ async function copiarCodigo() {
 }
 
 async function iniciar() {
+  // Esta acción llama al endpoint exclusivo del anfitrión y navega a la primera ronda.
   if (!puedeIniciar.value || iniciando.value) return
 
   iniciando.value = true
@@ -212,6 +216,7 @@ async function salir() {
           </button>
         </div>
 
+        <!-- v-for representa un elemento por cada jugador recibido de la API. -->
         <ol
           v-if="jugadores.length"
           class="participantes"

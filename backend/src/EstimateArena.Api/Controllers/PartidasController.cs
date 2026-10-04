@@ -43,8 +43,12 @@ public sealed class PartidasController(IPartidasServicio partidas) : ControllerB
 
     [HttpPost("{partidaId:long}/rondas/{rondaId:long}/estimaciones")]
     [Authorize(Roles = "JUGADOR")]
-    public Task<EstimacionAceptada> EnviarEstimacion(long partidaId, long rondaId, [FromBody] EnviarEstimacionSolicitud solicitud, CancellationToken cancellationToken) =>
-        partidas.EnviarEstimacionAsync(partidaId, rondaId, solicitud.Valor, ObtenerSesion(), cancellationToken);
+    [EnableRateLimiting("estimacion")]
+    public async Task<ActionResult<EstimacionAceptada>> EnviarEstimacion(long partidaId, long rondaId, [FromBody] EnviarEstimacionSolicitud solicitud, CancellationToken cancellationToken)
+    {
+        var estimacion = await partidas.EnviarEstimacionAsync(partidaId, rondaId, solicitud.Valor, ObtenerSesion(), cancellationToken);
+        return Created(string.Empty, estimacion);
+    }
 
     [HttpGet("{partidaId:long}/rondas/{rondaId:long}/resultados")]
     [Authorize]
